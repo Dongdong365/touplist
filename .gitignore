@@ -1,0 +1,27 @@
+# Java 编译输出
+build/
+out/
+target/
+*.class
+
+# Gradle 相关
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+!gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# 本地配置文件
+local.properties
+
+# 系统文件
+Thumbs.db
+.DS_Store

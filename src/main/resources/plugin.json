@@ -1,0 +1,8 @@
+{
+  "name": "touplist",
+  "author": "Rukkit,Dongdong365",
+  "main": "com.cn.Dongdong365.touplist.UplistPlugin",
+  "description": "铁锈战争 Uplist 公开列表插件",
+  "version": "1.2.0.1",
+  "supportedVersions": ">= 1.0"
+}

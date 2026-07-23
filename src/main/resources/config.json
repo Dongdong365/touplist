@@ -1,0 +1,71 @@
+// ===================================================================
+//  不要试图更改格式，请更改能更改的区域
+//  (开过minecraft的腐竹们不可能不知道吧:)
+//  任何更改其格式都可能导致插件爆炸
+// ===================================================================
+//
+//  铁锈战争 Uplist 插件配置文件
+//  修改后请使用命令 "publish reload" 热重载，或重启服务器生效。
+//
+//  可用指令：
+//   publish start               启动列表公开
+//   publish stop                关闭列表公开
+//   publish reload              热重载此配置文件
+//   publish ip <公网IP或域名>    设置你的公网IP地址
+//   publish port <端口号>       设置公网映射端口
+//   publish motd <内容>         设置服务器MOTD(地图描述)
+//   publish name <房间名>       设置服务器房间名称
+//   publish version <版本号>    设置游戏版本字符串(如1.15-FG)
+//   publish maxplayers <数量>   设置最大玩家数(-1为自动计算)
+//   publish syncmap             切换MOTD是否作为地图名显示
+//   publish proxy <SOCKS|HTTP> <主机> [端口]  设置代理
+//   publish proxy off           关闭代理
+//   publish state               查看当前公开状态与配置
+//   publish help                显示此帮助信息
+//
+{
+  // 你的公网IP或域名。留空则使用内网IP占位符。
+  "public_ip": "vip.bj.frp.one",
+
+  // 公网端口，必须与端口映射/防火墙放行的端口一致。(内网穿透推荐端口和你的rukkit.yml中的port一致。)
+  "public_port": 16675,
+
+  // 服务器MOTD(地图描述)。留空则自动使用Rukkit默认MOTD。
+  "motd": "",
+
+  // 房间名称。留空则自动使用Rukkit的serverUser。
+  "server_name": "",
+
+  // 游戏版本字符串，可自定义(如1.15-AA, 1.15BB)。
+  "version": "1.15-UR",
+
+  // 游戏版本号（整数），固定为176即可。
+  "version_int": 176,
+
+  // 房间密码，"0"表示无密码。
+  "password": "0",
+
+  // 游戏模式，固定为"skirmishMap"。
+  "game_mode": "skirmishMap",
+
+  // 服务器状态，"battleroom"(等待中) 或 "ingame"(游戏中)。
+  "game_status": "battleroom",
+
+  // 最大玩家数。填-1则自动使用Rukkit的maxPlayer * maxRoom计算。
+  "maxplayers": 10,
+
+  // 是否将MOTD作为地图名称显示。true=同步，false=使用房间名作为地图名。
+  "sync_motd_to_map": true,
+
+  // 是否启用代理（仅当插件直接连接官方时需要）
+  "proxy_enabled": false,
+
+  // 代理类型，SOCKS 或 HTTP
+  "proxy_type": "SOCKS",
+
+  // 代理服务器地址
+  "proxy_host": "127.0.0.1",
+
+  // 代理服务器端口
+  "proxy_port": 1080
+}

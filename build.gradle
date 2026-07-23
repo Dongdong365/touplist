@@ -1,0 +1,32 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '7.0.0'
+}
+[compileJava, compileTestJava, javadoc]*.options*.encoding = 'UTF8'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.squareup.okhttp3:okhttp:5.0.0-alpha.11'
+    implementation 'com.alibaba:fastjson:1.2.83'
+}
+
+shadowJar {
+    archiveBaseName = 'touplist'
+    archiveClassifier = ''
+    archiveVersion = TOUPLISTVERSION
+    
+    from sourceSets.main.output
+    from sourceSets.main.resources
+    
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+}
+
+build {
+    dependsOn shadowJar
+}
