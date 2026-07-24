@@ -14,6 +14,22 @@
  * All modified source code must be made available under the same license
  * and must retain this copyright notice, conditions, and disclaimers.
  * 所有修改后的源代码必须在相同许可证下公开，并保留此版权声明、条件及免责声明。
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * 本程序是自由软件：您可以根据自由软件基金会发布的 GNU Affero 通用公共许可证
+ * 第 3 版（或您选择的任何更高版本）的条款重新分发和/或修改它。
+ *
+ * 本程序分发的目的是希望它有用，但没有任何担保；甚至没有适销性或
+ * 特定用途适用性的暗示担保。详情请参见 GNU Affero 通用公共许可证。
  */
 
 package com.cn.Dongdong365.touplist;
