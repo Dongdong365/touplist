@@ -9,7 +9,7 @@
  * 本项目是 example-uplist-plugin 的衍生作品，使用 GNU Affero General Public License v3.0 许可证。
  * 您可以在下方链接查看许可证全文：
  *
- * https://github.com/RukkitDev/example-uplist-plugin/blob/main/LICENSE
+ * https://github.com/Dongdong365/touplist/blob/main/LICENSE
  *
  * All modified source code must be made available under the same license
  * and must retain this copyright notice, conditions, and disclaimers.
