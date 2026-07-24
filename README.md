@@ -187,8 +187,19 @@ publish start                  # 启动公开
 ### 特别注意
 如果你的RW-HPS提示房间拒绝重连，请使用HOST帐号输入.sync off即可 禁止重连为翻译故障，实际为关闭重连锁。(这不是你的问题，也不是我们的问题)
 
+如果你的RW-HPS出现了多个房主的情况请前往data\ConfigServer.json 找到
+```json
+  "oneAdmin": true,
+```
+改为
+```json
+  "oneAdmin": false,
+```
+关闭自动给HOST，然后在服务端用.admin add <你的位置> 即可。
 
+查询所有管理:.admins
 
+(这不是你的问题，也不是插件的问题，仅作为常见提示。)
 
 
 
