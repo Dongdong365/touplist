@@ -2,14 +2,14 @@
  * Copyright (c) 2020-2022 RukkitDev Team and contributors.
  * Copyright (c) 2026 Dongdong365 (modifications).
  *
- * This project is a derivative work of Rukkit and is licensed under the
+ * This project is a derivative work of example-uplist-plugin and is licensed under the
  * GNU Affero General Public License v3.0. You may obtain a copy of the
  * license at the following link:
  *
- * 本项目是 Rukkit 的衍生作品，使用 GNU Affero General Public License v3.0 许可证。
+ * 本项目是 example-uplist-plugin 的衍生作品，使用 GNU Affero General Public License v3.0 许可证。
  * 您可以在下方链接查看许可证全文：
  *
- * https://github.com/RukkitDev/Rukkit/blob/master/LICENSE
+ * https://github.com/RukkitDev/example-uplist-plugin/blob/main/LICENSE
  *
  * All modified source code must be made available under the same license
  * and must retain this copyright notice, conditions, and disclaimers.
