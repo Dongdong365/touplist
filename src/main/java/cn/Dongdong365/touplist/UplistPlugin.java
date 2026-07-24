@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2020-2022 RukkitDev Team and contributors.
+ * Copyright (c) 2026 Dongdong365 (modifications).
+ *
+ * This project is a derivative work of Rukkit and is licensed under the
+ * GNU Affero General Public License v3.0. You may obtain a copy of the
+ * license at the following link:
+ *
+ * 本项目是 Rukkit 的衍生作品，使用 GNU Affero General Public License v3.0 许可证。
+ * 您可以在下方链接查看许可证全文：
+ *
+ * https://github.com/RukkitDev/Rukkit/blob/master/LICENSE
+ *
+ * All modified source code must be made available under the same license
+ * and must retain this copyright notice, conditions, and disclaimers.
+ * 所有修改后的源代码必须在相同许可证下公开，并保留此版权声明、条件及免责声明。
+ */
+
 package com.cn.Dongdong365.touplist;
 
 import com.alibaba.fastjson.JSON;
