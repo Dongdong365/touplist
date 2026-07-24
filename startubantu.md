@@ -87,7 +87,7 @@ ss -tlnp | grep 8888   # 应显示 LISTEN
 ```
 恭喜你完成代理搭建！现在进行下一步
 
-## 启动frp服务端(射影rukkit端口到云服)
+## 启动frp服务端(射影RW-HPS端口到云服)
 一、云服务器端（Ubuntu）—— 安装 FRP 服务端
 1. 下载 FRP(下载慢是正常的)(非常慢或超时可以去BING搜github镜像站)（使用 专用于下载Release、压缩包 的镜像链接）
 
