@@ -190,6 +190,9 @@ frpc.exe
 ```
 如果看到 [proxy] [rusted_warfare_tcp] start proxy success 和 [rusted_warfare_udp] start proxy success，说明连接成功。
 
+请进入 
+pluginstart.md
+
 ## 现在云服务器以及本地frp已经全部设置完成，让我们回到插件.请转到本仓库中 pluginstart.md
 
 ### 安全相关
