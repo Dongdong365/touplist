@@ -210,6 +210,10 @@ publish start                  # 启动公开
 
 (这不是你的问题，也不是插件的问题，仅作为常见提示。)
 
+插件出现`[ERROR][Thread-33] 官方请求失败: Unexpected end of file from server`报错
+
+请检查你的代理配置是否正确！
+
 ### 至此！赤石已成！咕咕嘎嘎！！！！！！
 
 
