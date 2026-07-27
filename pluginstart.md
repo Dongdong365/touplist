@@ -14,7 +14,7 @@
   // 代理服务器地址(你云服IP)
   "proxy_host": "127.0.0.1",
 
-  // 代理服务器端口(你云服tinyproxy的端口)
+  // 代理服务器端口(你前面云服的tinyproxy.conf端口(port)是啥就是啥)
   "proxy_port": 8888
 "
 ```
@@ -29,7 +29,7 @@ proxy_type 将其设置为http开启http代理即可
 proxy_host 将其设置为 你云服IP即可(例如云服ip164.157.465.14)
   "proxy_host": "164.157.465.14",
 
-proxy_port 将其设置为8888(你前面云服的http端口是啥就是啥)开启http代理
+proxy_port 将其设置为8888(你前面云服的tinyproxy.conf端口(port)是啥就是啥)开启http代理
   "proxy_port": 8888
 ```
 
@@ -165,7 +165,7 @@ proxy_type 将其设置为http开启http代理即可
 proxy_host 将其设置为 你云服IP即可(例如云服公网ip164.157.465.14)
   "proxy_host": "164.157.465.14",
 
-proxy_port 将其设置为8888(你前面云服的http端口是啥就是啥)开启http代理
+proxy_port 将其设置为8888(你前面云服的tinyproxy.conf端口(port)是啥就是啥)开启http代理
   "proxy_port": 8888
 ```
 ### ❤️ 写在最后
