@@ -169,6 +169,8 @@ proxy_host 将其设置为 你云服IP即可(例如云服公网ip164.157.465.14)
 proxy_port 将其设置为8888(你前面云服的tinyproxy.conf端口(port)是啥就是啥)开启http代理
   "proxy_port": 8888
 ```
+命令修改:`由于插件编写错误，本端无法使用代码修改。请直接修改配置。`
+# 热重载配置指令:`publish reload`
 ### ❤️ 写在最后
 感谢您选择 touplist-plugins！
 希望它能帮助您的服务器被更多玩家发现。祝您游戏愉快！
