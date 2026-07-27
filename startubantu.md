@@ -203,25 +203,30 @@ frp有密钥基本上不怕，但是如果你有需求请一并与ai沟通
 
 ### 🚀 云服务器开机后操作步骤(安装向导走完以后用这个步骤)
 1. SSH 登录
-bash
+```bash
 ssh root@103.999.465.13
+```
 2. 启动 SOCKS5/HTTP 代理（Dante）
-bash
+```bash
 systemctl start danted
+```
 检查是否成功：
 
-bash
+```bash
 ss -tlnp | grep 1080
+```
 看到 LISTEN 说明代理已运行。
 
 3. 启动 FRP 服务端
-bash
+```bash
 cd ~/frp_0.57.0_linux_amd64
 nohup ./frps -c frps.toml > frps.log 2>&1 &
+```
 检查：
 
-bash
+```bash
 ss -tlnp | grep 7000
+```
 看到 LISTEN 说明 FRP 服务端已运行。
 
 （把 你家公网IP 换成你当下的公网 IP）
