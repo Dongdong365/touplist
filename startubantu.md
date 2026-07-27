@@ -206,14 +206,14 @@ frp有密钥基本上不怕，但是如果你有需求请一并与ai沟通
 ```bash
 ssh root@103.999.465.13
 ```
-2. 启动 SOCKS5/HTTP 代理（Dante）
+2. 启动 SOCKS5/HTTP 代理（tinyproxy）
 ```bash
-systemctl start danted
+tinyproxy -c /etc/tinyproxy/tinyproxy.conf
 ```
 检查是否成功：
 
 ```bash
-ss -tlnp | grep 1080
+ss -tlnp | grep 8888
 ```
 看到 LISTEN 说明代理已运行。
 
