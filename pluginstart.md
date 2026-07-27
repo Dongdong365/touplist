@@ -1,7 +1,7 @@
 ### 现在进行插件部分
 ## 有两个方案但结果一致，我们只提供更简便的方案
 # 直接编辑配置文件
-打开服务器根目录，找到config.json文件
+初次打开插件时，会生成config.json到根目录，现在打开config.json文件
 找到下列内容
 ```json
 "
@@ -173,7 +173,7 @@ proxy_port 将其设置为8888(你前面云服的tinyproxy.conf端口(port)是�
 # 热重载配置指令:`publish reload`
 # 你已成功配置完成，现在使用`publish start`一命令上列表吧!
 # 以后如何操作？
-使用`publish start`一命令上列表，上列表前检查conf.json文件是否为你设定的内容。
+使用`publish start`一命令上列表，上列表前检查config.json文件是否为你设定的内容。
 
 ### ❤️ 写在最后
 感谢您选择 touplist-plugins！
