@@ -119,6 +119,12 @@ bindPort = 7000
 auth.token = "你自己编一个复杂的密码，比如 x8Fk2Lp9qR5tY"
 EOF
 ```
+```bash
+cat > frps.toml << 'EOF'
+bindPort = 7000
+auth.token = "你自己编一个复杂的密码，比如 x8Fk2Lp9qR5tY"
+EOF
+```
 4.  停掉所有 FRP 进程
 ```bash
 pkill frps
