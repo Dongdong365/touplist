@@ -171,6 +171,10 @@ proxy_port 将其设置为8888(你前面云服的tinyproxy.conf端口(port)是�
 ```
 命令修改:`由于插件编写错误，本端无法使用代码修改。请直接修改配置。`
 # 热重载配置指令:`publish reload`
+# 你已成功配置完成，现在使用`publish start`一命令上列表吧!
+# 以后如何操作？
+使用`publish start`一命令上列表，上列表前检查conf.json文件是否为你设定的内容。
+
 ### ❤️ 写在最后
 感谢您选择 touplist-plugins！
 希望它能帮助您的服务器被更多玩家发现。祝您游戏愉快！
