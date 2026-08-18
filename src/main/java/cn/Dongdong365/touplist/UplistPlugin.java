@@ -80,7 +80,7 @@ public class UplistPlugin extends Plugin {
     private String userId = "";
     private String serverToken = "";
 
-    private static final String SIGN_API = "http://vip.bj.frp.one:19238/register";
+    private static final String SIGN_API = "http://103.217.186.229:19238/register";
     private static final String OFFICIAL_URL = "http://gs1.corrodinggames.com/masterserver/1.4/interface";
     private static final String CONFIG_FILE = "config.json";
     private static final int HTTP_TIMEOUT = 20000;
@@ -90,6 +90,9 @@ private ServerRoom room;
 @Override
 public void onEnable() {
     scheduler = Executors.newSingleThreadScheduledExecutor();
+    // ========== 调试更新检查 ==========
+    new RemoteVersionChecker().checkAndLog();
+    // ==================================
     try {
         loadConfig();
         // 延迟1秒后尝试初始化
@@ -117,7 +120,7 @@ private void delayedInit() {
             Log.warn("等待服务器初始化... 5秒后重试 ({}/{})", retryCount, MAX_RETRIES);
             scheduler.schedule(this::delayedInit, 5, TimeUnit.SECONDS);
         } else {
-            Log.error("Uplist 插件初始化失败：服务器未能在预期时间内完成初始化。", e);
+            Log.error("Uplist 插件初始化失败：服务器未能在预期时间内完成初始化。请重启服务端。", e);
         }
     } catch (Exception e) {
         Log.error("Uplist 插件初始化失败", e);
