@@ -1,4 +1,4 @@
-package com.cn.dongdong365.touplist;
+package com.cn.Dongdong365.touplist;
 
 import net.rwhps.server.util.log.Log;
 
@@ -22,7 +22,7 @@ import java.util.concurrent.ThreadFactory;
 public class RemoteVersionChecker {
     // ======================== 可配置常量（只改这里） ========================
     private static final String PLUGIN_NAME = "touplist-plugin";          // 远程版本列表中的键名
-    private static final String CURRENT_VERSION = "v26.08.16";        // 当前插件版本
+    private static final String CURRENT_VERSION = "v26.08.18";        // 当前插件版本
     private static final String REMOTE_URL = "http://www.rustedsvrwiki.de5.net/dongserverpluginslastversion.txt";
     private static final String PREFIX = "touplist";       // 日志中的前缀（可改短）
     // =====================================================================
