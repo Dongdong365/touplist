@@ -1,12 +1,5 @@
 # touplist-plugin
 
-> [!WARNING]
-> **为什么我们选择暂时不更新？**
-> 
-> 目前的服务端基本上对于可玩度都不是很高，且停更许久。对于玩家需要的方面更是支持度不高(生存图等)。
->
-> 所以本插件停更一段时间，直到有稳定的开服方案后再稳步推进。
-
 > [!CAUTION]
 > **法律声明 & 免责条款**
 >
@@ -29,7 +22,7 @@
 > [!WARNING]
 > **插件真的能稳定运行吗**
 > 
-> 不可以，插件所需的api还没有搭建完成，测试环境也仅为搭建FRP后API及插件互相通信测试:(当前正在努力寻找稳定的方案,还请尽情期待!
+> 本 插件及API 由第三方维护，不保证服务绝对稳定。使用过程中可能偶发延迟或短暂不可用，属正常情况，维护者会尽力保障服务可用性。仅供个人服主测试使用，不建议大型公开服务器长期依赖。高频请求可能导致服务拥堵，影响其他用户正常使用。
 
 本插件改编自 [example-uplist-plugin](https://github.com/RukkitDev/example-uplist-plugin) 插件，添加了配置持久化、热重载、同步地图等功能。
 
@@ -60,11 +53,12 @@ gradle shadowJar
 ### 第一步：悉知你需要的 API 
 插件本身不直接向官方发送请求，而是先找 API 要一个“签名后的请求串”，然后插件拿着这个串自己去和官方沟通。
 
-> **我开放了 API 吗？**  
-> 目前列表环境比较乱，为了避免被滥用，请像我一样的个人服主前往uplist文件夹申请 API 地址的。或者你可以参考文末的资料自己搭一个。
+API并不是直接装上就能使用的，而是要先进行一步认证：[公开列表 API 白名单申请](https://github.com/Dongdong365/ToUpList-API-Whitelist)
+
+将该仓库Fork到本地后根据描述文件的提示进行修改，改完点击`Pull requests` `Create pull request` 即可将你的请求发送！
 
 > [!WARNING]
-> 注意，目前api正在内测暂不开放.此插件暂时不可公开用。
+> 注意，目前api正在内测.可能会出现平时测试遇不到的问题，会尽快进行修复。
 
 ---
 
@@ -189,11 +183,9 @@ publish start                  # 启动公开
 
 ## 🙏 特别鸣谢
 
-感谢 api.data.der.kim ([@deng-rui](https://github.com/deng-rui)) 提供有关列表公开的 API 支持。  
+感谢 api.data.der.kim 提供有关列表公开的 API 支持。   
 感谢 RELAY-CN 的开源脚本提供的签名算法参考。([FakeListRoom](https://github.com/RELAY-CN/FakeListRoom/blob/main/fake.sh))  
-感谢 chmlfrp 提供的内网穿透服务。([chmlfrp](https://chmlfrp.net/))  
-感谢 corrodinggames 提供的 API 服务器列表。  
-感谢 ([Rukkit 提供的演示插件](https://github.com/RukkitDev/example-uplist-plugin))，本插件基于此插件修改。  
+感谢 ([Rukkit 提供的演示插件](https://github.com/RukkitDev/example-uplist-plugin))，本插件基于此插件修改，并按照许可证规定执行。  
 
 由于我是用豆包+TraeAI+DeepSeek编写的，如有许可问题请联系我更改或删除！不要先举报，谢谢！
 
