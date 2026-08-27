@@ -160,9 +160,15 @@ publish start                  # 启动公开
 
 **详细步骤**：
 
-详见 本仓库内 startubantu.md 文件
+详见 本仓库内 startubantu.md 文件(ubantu)
+
+详见 本仓库内 startwindows.md 文件(windows)
 
 > **注意**：如果你已经拥有一台不错的云服务器，也可以直接将 RW-HPS 安装在云服务器上运行，那样连 FRP 都不需要，直接 `publish ip 云服务器IP`，`publish port 游戏端口`，开启或不开启代理均可，房间直接就是 Y 状态。
+
+### 安全相关（重要）
+你可能已经知道SOCKS/HTTP 代理都没有防护措施，这意味着任何知道你 IP 的人都能直接使用这个 SOCKS/HTTP 代理。
+frp有密钥基本上不怕，但是如果你有 SOCKS/HTTP 代理安全 需求 **请自行与ai沟通**。不在本仓库范围内。
 
 ---
 
