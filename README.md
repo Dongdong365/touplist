@@ -29,7 +29,7 @@
 > [!WARNING]
 > **插件真的能稳定运行吗**
 > 
-> 不可以，插件所需的api还没有搭建完成，测试环境也仅为搭建FRP后API及插件互相通信测试:(当前正在努力寻找稳定的方案,还请尽情期待!
+> 因为本插件为第三方服务商运营，可能会导致部分BUG。我们“按原样”提供。
 
 本插件改编自 [example-uplist-plugin](https://github.com/RukkitDev/example-uplist-plugin) 插件，添加了配置持久化、热重载、同步地图等功能。
 
@@ -61,10 +61,7 @@ gradle shadowJar
 插件本身不直接向官方发送请求，而是先找 API 要一个“签名后的请求串”，然后插件拿着这个串自己去和官方沟通。
 
 > **我开放了 API 吗？**  
-> 目前列表环境比较乱，为了避免被滥用，请像我一样的个人服主前往uplist文件夹申请 API 地址的。或者你可以参考文末的资料自己搭一个。
-
-> [!WARNING]
-> 注意，目前api正在内测暂不开放.此插件暂时不可公开用。
+> 目前列表环境比较乱，为了避免被滥用，请像我一样的个人服主前往[ToUpList-API-Whitelist仓库](https://github.com/Dongdong365/ToUpList-API-Whitelist)申请 API 地址。或者你可以参考文末的资料自己搭一个。
 
 ---
 
@@ -195,10 +192,7 @@ frp有密钥基本上不怕，但是如果你有 SOCKS/HTTP 代理安全 需求 
 
 ## 🙏 特别鸣谢
 
-感谢 api.data.der.kim ([@deng-rui](https://github.com/deng-rui)) 提供有关列表公开的 API 支持。  
-感谢 RELAY-CN 的开源脚本提供的签名算法参考。([FakeListRoom](https://github.com/RELAY-CN/FakeListRoom/blob/main/fake.sh))  
-感谢 chmlfrp 提供的内网穿透服务。([chmlfrp](https://chmlfrp.net/))  
-感谢 corrodinggames 提供的 API 服务器列表。  
+感谢 RELAY-CN 的开源脚本提供的签名算法参考。([FakeListRoom](https://github.com/RELAY-CN/FakeListRoom/blob/main/fake.sh))   
 感谢 ([Rukkit 提供的演示插件](https://github.com/RukkitDev/example-uplist-plugin))，本插件基于此插件修改。  
 
 由于我是用豆包+TraeAI+DeepSeek编写的，如有许可问题请联系我更改或删除！不要先举报，谢谢！
