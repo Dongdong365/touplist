@@ -25,6 +25,8 @@
 
 该插件理论适用于 ***RW-HPS 以及其下游*** 的任何服务端。本插件于2026年7月27日完成v26.07的可用性测试，测试环境内的结果为完全可用。
 
+CNKD-NEXT服务端见:[为什么我的服务端拒绝加载插件？（CNKD NEXT 插件锁 / Plugin Lock）](http://www.rustedsvrwiki.de5.net/rwhps/extension/plugins/cnkdnext/plugin-sdk/)
+
 部分服务端对于RW-HPS的改动可能较大需要自行验证能不能用。比如````publish port 114514```` ,然后去看配置里的``public_port``改没改 来辨别可用性。
 > [!WARNING]
 > **插件真的能稳定运行吗**
