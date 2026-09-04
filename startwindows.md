@@ -13,13 +13,13 @@
 可能会有提示，你直接点击允许即可。
 
 2. 3proxy
-免费开源、单 exe、原生 Windows、轻量，完美实现同等功能，大量 RW-HPS Windows 服主在用。
+免费开源、单 exe、原生 Windows、轻量，完美实现同等功能。
 
 官网下载：https://3proxy.org/
 
 访问不了可以用GITHUB下载：https://github.com/3proxy/3proxy
 
-(注意下载的时候记得关杀毒软件要不然会没有.exe文件)
+(注意下载的时候记得关杀毒软件要不然会丢失重要文件)
 
 在`\3proxy\bin64`下新建配置文件 proxy.cfg
 
