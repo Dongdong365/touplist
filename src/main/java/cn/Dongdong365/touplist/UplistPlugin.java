@@ -62,13 +62,13 @@ public class UplistPlugin extends Plugin {
     private int publicPort = 5123;
     private String motd = "";
     private String serverName = "";
-    private String versionStr = "1.15-RW-HPS";
+    private String versionStr = "1.15-TUL";
     private int versionInt = 176;
     private String password = "0";
     private String gameMode = "skirmishMap";
     private String gameStatus = "battleroom";
     private int maxPlayers = -1;
-    private boolean syncMotdToMap = true;
+    private boolean syncMotdToMap = false;
 
     // 代理
     private boolean proxyEnabled = false;
@@ -76,12 +76,14 @@ public class UplistPlugin extends Plugin {
     private String proxyHost = "127.0.0.1";
     private int proxyPort = 1080;
 
-    // 凭证
+    // 凭证（两个服务器共用同一套）
     private String userId = "";
     private String serverToken = "";
+    private boolean serverUp1 = false, serverUp2 = false;
 
     private static final String SIGN_API = "http://103.217.186.229:19238/register";
-    private static final String OFFICIAL_URL = "http://gs1.corrodinggames.com/masterserver/1.4/interface";
+    private static final String OFFICIAL_URL_1 = "http://gs1.corrodinggames.com/masterserver/1.4/interface";
+    private static final String OFFICIAL_URL_2 = "http://gs4.corrodinggames.net/masterserver/1.4/interface";
     private static final String CONFIG_FILE = "config.json";
     private static final int HTTP_TIMEOUT = 20000;
 
@@ -90,9 +92,7 @@ private ServerRoom room;
 @Override
 public void onEnable() {
     scheduler = Executors.newSingleThreadScheduledExecutor();
-    // ========== 调试更新检查 ==========
     new RemoteVersionChecker().checkAndLog();
-    // ==================================
     try {
         loadConfig();
         // 延迟1秒后尝试初始化
@@ -117,10 +117,10 @@ private void delayedInit() {
         Log.info("Uplist 插件加载完成。使用 publish help 查看指令。");
     } catch (kotlin.UninitializedPropertyAccessException e) {
         if (++retryCount <= MAX_RETRIES) {
-            Log.warn("等待服务器初始化... 5秒后重试 ({}/{})", retryCount, MAX_RETRIES);
+            Log.debug("等待服务器初始化... 5秒后重试 ({}/{})", retryCount, MAX_RETRIES);
             scheduler.schedule(this::delayedInit, 5, TimeUnit.SECONDS);
         } else {
-            Log.error("Uplist 插件初始化失败：服务器未能在预期时间内完成初始化。请重启服务端。", e);
+            Log.warn("Uplist 插件初始化失败：服务器未能在预期时间内完成初始化。请重启服务端。", e);
         }
     } catch (Exception e) {
         Log.error("Uplist 插件初始化失败", e);
@@ -196,6 +196,7 @@ private void delayedInit() {
         String name = serverName.isEmpty() ? Data.config.getServerName() : serverName;
         Log.info("== 状态 ==\n" +
                 "公开: " + (isPublished ? "是" : "否") + " | 在线: " + (upState ? "是" : "否") + "\n" +
+                "gs1 在线: " + (serverUp1 ? "是" : "否") + " | gs4 在线: " + (serverUp2 ? "是" : "否") + "\n" +
                 "IP: " + publicIp + ":" + publicPort + " | MOTD: " + motd + "\n" +
                 "房间: " + name + " | 版本: " + versionStr + " | 最大: " + (maxPlayers == -1 ? "自动" : maxPlayers) + "\n" +
                 "同步地图: " + (syncMotdToMap ? "开" : "关") + "\n" +
@@ -203,13 +204,14 @@ private void delayedInit() {
     }
 
     // ========== 服务器列表操作 ==========
-    private void addServer() { userId = ""; serverToken = ""; sendRequest("add"); }
-    private void updateServer() { if (userId.isEmpty() || serverToken.isEmpty()) { addServer(); return; } sendRequest("update"); }
+    private void addServer() { userId = ""; sendRequest("add"); }
+    private void updateServer() { if (userId.isEmpty()) { addServer(); return; } sendRequest("update"); }
     private void stopServer() {
-        if (userId.isEmpty() || serverToken.isEmpty()) { Log.info("无凭证，无法停止"); return; }
+        if (userId.isEmpty()) { Log.info("无凭证，无法停止"); return; }
         sendRequest("remove");
         if (scheduler != null) scheduler.shutdownNow();
         isPublished = false; upState = false;
+        serverUp1 = false; serverUp2 = false;
     }
 
     private void sendRequest(String action) {
@@ -217,7 +219,6 @@ private void delayedInit() {
         int port = publicPort > 0 ? publicPort : Data.config.getPort();
         String ip = publicIp.isEmpty() ? "10.0.0.1" : publicIp;
         String name = serverName.isEmpty() ? Data.config.getServerName() : serverName;
-        // MOTD: 配置中没有默认MOTD，直接使用用户设置的motd（若空则空字符串）
         String curMotd = motd.isEmpty() ? "" : motd;
         int max = maxPlayers == -1 ? Data.configServer.getMaxPlayer() : maxPlayers;
         int players = room.getPlayerManage().playerGroup.size();
@@ -251,8 +252,8 @@ private void delayedInit() {
                         String signedBody = obj.getString("body");
                         userId = obj.getString("user_id");
                         serverToken = obj.getString("server_token");
-                        Log.debug("签名成功，发送到官方服务器...");
-                        sendToOfficial(signedBody, action);
+                        Log.debug("签名成功，同时发送到两个官方服务器...");
+                        sendToBothServers(signedBody, action, userId, serverToken);
                     } else {
                         Log.error("签名 API 返回错误: " + response);
                     }
@@ -267,51 +268,74 @@ private void delayedInit() {
         });
     }
 
-    private void sendToOfficial(String signedBody, String action) {
+    private void sendToBothServers(String signedBody, String action, String uid, String token) {
         if ("add".equals(action)) {
             Log.info("正在向官方服务器注册（超时20秒）...");
         }
-        httpPost(OFFICIAL_URL, signedBody, new HttpCallback() {
+        httpPost(OFFICIAL_URL_1, signedBody, buildCallback(1, action));
+        httpPost(OFFICIAL_URL_2, signedBody, buildCallback(2, action));
+    }
+
+    private HttpCallback buildCallback(int serverNum, String action) {
+        String urlLabel = serverNum == 1 ? "gs1" : "gs4";
+        return new HttpCallback() {
             @Override
             public void onSuccess(String response) {
-                handleOfficialResponse(response, action);
+                handleOfficialResponse(response, action, serverNum, urlLabel);
             }
             @Override
             public void onFailure(Exception e) {
-                Log.error("官方请求失败: " + e.getMessage());
+                Log.error(urlLabel + " 服务器请求失败: " + e.getMessage());
             }
-        });
+        };
     }
 
-    private void handleOfficialResponse(String response, String action) {
+    private void handleOfficialResponse(String response, String action, int serverNum, String urlLabel) {
         String clean = response.replace("CORRODINGGAMES[1.0]", "").trim();
-        Log.debug("官方响应: " + clean);
+        Log.debug(urlLabel + " 响应: " + clean);
+
         if (clean.startsWith("u_")) {
-            upState = true;
-            isPublished = true;
-            if (scheduler.isShutdown()) {
-                scheduler = Executors.newSingleThreadScheduledExecutor();
-            }
-            scheduler.scheduleAtFixedRate(this::updateServer, 15, 15, TimeUnit.SECONDS);
-            Log.info("服务器已公开！ID: " + clean);
-            sendSelfInfo();
+            if (serverNum == 1) serverUp1 = true; else serverUp2 = true;
+            Log.info(urlLabel + " 服务器注册/更新成功！ID: " + clean);
         } else if (clean.contains("UPDATED")) {
-            upState = true;
-            Log.info("更新成功");
+            if (serverNum == 1) serverUp1 = true; else serverUp2 = true;
+            Log.info(urlLabel + " 更新成功");
         } else if (clean.contains("GAME NOT FOUND") || clean.contains("BAD_REQUEST") || clean.contains("FAILED")) {
-            upState = false;
-            Log.error("操作失败: " + clean);
+            if (serverNum == 1) serverUp1 = false; else serverUp2 = false;
+            Log.error(urlLabel + " 操作失败: " + clean);
         } else {
-            Log.warn("未知响应: " + clean);
+            Log.warn(urlLabel + " 未知响应: " + clean);
+        }
+
+        // 更新聚合状态
+        isPublished = serverUp1 || serverUp2;
+        upState = serverUp1 || serverUp2;
+
+        // 任一服务器在线则启动定时上报
+        if (upState && (scheduler == null || scheduler.isShutdown())) {
+            scheduler = Executors.newSingleThreadScheduledExecutor();
+            scheduler.scheduleAtFixedRate(this::updateServer, 15, 15, TimeUnit.SECONDS);
+            Log.info("服务器已公开！");
+            sendSelfInfo();
+        } else if (!upState) {
+            if (scheduler != null && !scheduler.isShutdown()) {
+                scheduler.shutdownNow();
+            }
         }
     }
 
     private void sendSelfInfo() {
-        if (userId.isEmpty() || serverToken.isEmpty()) return;
-        int port = publicPort > 0 ? publicPort : Data.config.getPort();
-        String apiParams = "action=self_info&user_id=" + urlEncode(userId) +
-                           "&port=" + port +
-                           "&server_token=" + urlEncode(serverToken);
+        // 分别对每个服务器发送自检
+        if (!userId.isEmpty()) {
+            sendSelfInfoTo(userId, serverToken, OFFICIAL_URL_1, "gs1");
+            sendSelfInfoTo(userId, serverToken, OFFICIAL_URL_2, "gs4");
+        }
+    }
+
+    private void sendSelfInfoTo(String uid, String token, String url, String label) {
+        String apiParams = "action=self_info&user_id=" + urlEncode(uid) +
+                           "&port=" + publicPort +
+                           "&server_token=" + urlEncode(token);
         httpPost(SIGN_API, apiParams, new HttpCallback() {
             @Override
             public void onSuccess(String r) {
@@ -319,21 +343,21 @@ private void delayedInit() {
                     JSONObject obj = JSON.parseObject(r);
                     if ("ok".equals(obj.getString("result"))) {
                         String signedBody = obj.getString("body");
-                        httpPost(OFFICIAL_URL, signedBody, new HttpCallback() {
+                        httpPost(url, signedBody, new HttpCallback() {
                             @Override
                             public void onSuccess(String r2) {
-                                Log.debug("自检返回: " + r2);
-                                if (r2.contains("true")) Log.info("端口开放，公网状态 Y！");
-                                else Log.warn("端口未开放，请检查 UDP/TCP 映射");
+                                Log.debug(label + " 自检返回: " + r2);
+                                if (r2.contains("true")) Log.info(label + " 端口开放，公网状态 Y！");
+                                else Log.warn(label + " 端口未开放，你没有开放到列表。内网穿透玩家请检查 UDP/TCP 映射配置是否正确，代理是否开启。提交的ip是否正确，公网ip的防火墙是否打开。");
                             }
                             @Override
-                            public void onFailure(Exception e) { Log.warn("自检请求失败: " + e.getMessage()); }
+                            public void onFailure(Exception e) { Log.warn(label + " 自检请求失败: " + e.getMessage()); }
                         });
                     }
-                } catch (Exception e) { Log.warn("解析自检签名响应失败", e); }
+                } catch (Exception e) { Log.warn(label + " 解析自检签名响应失败", e); }
             }
             @Override
-            public void onFailure(Exception e) { Log.warn("自检签名请求失败: " + e.getMessage()); }
+            public void onFailure(Exception e) { Log.warn(label + " 自检签名请求失败: " + e.getMessage()); }
         });
     }
 
