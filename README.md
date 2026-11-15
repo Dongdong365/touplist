@@ -24,9 +24,11 @@
 > [!CAUTION]
 > 请不要在任何已经严厉声明禁止 使用上传列表 的服务端使用此插件！谢谢！
 
-一个用于 ***RW-HPS*** 的铁锈战争列表公布插件，基于 API 代理实现稳定上列表。  
+一个用于 ***RW-HPS*** 的铁锈战争列表公布插件，实现稳定上列表。  
 
 该插件理论适用于 ***RW-HPS 以及其下游*** 的任何服务端。本插件于2026年7月27日完成v26.07的可用性测试，测试环境内的结果为完全可用。
+
+**注意 CNKD NEXT 服务端默认日志等级** 设为 WARN 时，插件加载成功、注册成功等 `INFO` 级**提示全部不可见**，只能看到 `ERROR`/`WARN`。更改及详细解答见[log记录等级(str)](https://rustedsvrwiki.de5.net/rwhps/start/config-server/#log%E8%AE%B0%E5%BD%95%E7%AD%89%E7%BA%A7str)
 
 CNKD-NEXT服务端见:[为什么我的服务端拒绝加载插件？（CNKD NEXT 插件锁 / Plugin Lock）](http://www.rustedsvrwiki.de5.net/rwhps/extension/plugins/cnkdnext/plugin-sdk/)
 
