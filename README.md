@@ -28,7 +28,7 @@
 
 该插件理论适用于 ***RW-HPS 以及其下游*** 的任何服务端。本插件于2026年7月27日完成v26.07的可用性测试，测试环境内的结果为完全可用。
 
-> [!CAUTION]
+> [!WARNING]
 > 使用 CNKD NEXT 服务端的腐竹看这里！！！
 
 **注意 CNKD NEXT 服务端默认日志等级** 设为 WARN 时，插件加载成功、注册成功等 `INFO` 级**提示全部不可见**，只能看到 `ERROR`/`WARN`。更改及详细解答见[log记录等级(str)](https://rustedsvrwiki.de5.net/rwhps/start/config-server/#log%E8%AE%B0%E5%BD%95%E7%AD%89%E7%BA%A7str)。**建议设置为 `info`**
