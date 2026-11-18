@@ -18,26 +18,26 @@
 //   publish version <版本号>    设置游戏版本字符串(如1.15-FG)
 //   publish maxplayers <数量>   设置最大玩家数(-1为自动计算)
 //   publish syncmap             切换MOTD是否作为地图名显示
-//   publish proxy <SOCKS|HTTP> <主机> [端口]  设置代理
+//   publish proxy <SOCKS|HTTP> <主机> [端口] [用户] [密码]  设置代理（可选填凭证）
 //   publish proxy off           关闭代理
 //   publish state               查看当前公开状态与配置
 //   publish help                显示此帮助信息
 //
 {
   // 你的公网IP或域名。留空则使用内网IP占位符。
-  "public_ip": "vip.bj.frp.one",
+  "public_ip": "example.com",
 
-  // 公网端口，必须与端口映射/防火墙放行的端口一致。(内网穿透推荐端口和你的rukkit.yml中的port一致。)
+  // 公网端口，必须与端口映射/防火墙放行的端口一致。(内网穿透端口需与RW-HPS配置文件中port一致。)
   "public_port": 16675,
 
-  // 服务器MOTD(地图描述)。留空则自动使用Rukkit默认MOTD。
+  // 服务器MOTD(地图描述)。留空则自动使用RW-HPS配置文件中的默认MOTD。
   "motd": "",
 
-  // 房间名称。留空则自动使用Rukkit的serverUser。
+  // 房间名称。留空则自动使用RW-HPS配置文件中的serverUser。
   "server_name": "",
 
   // 游戏版本字符串，可自定义(如1.15-AA, 1.15BB)。
-  "version": "1.15-UR",
+  "version": "1.15-ToUplist",
 
   // 游戏版本号（整数），固定为176即可。
   "version_int": 176,
@@ -51,7 +51,7 @@
   // 服务器状态，"battleroom"(等待中) 或 "ingame"(游戏中)。
   "game_status": "battleroom",
 
-  // 最大玩家数。填-1则自动使用Rukkit的maxPlayer * maxRoom计算。
+  // 最大玩家数。填-1则自动使用RW-HPS配置文件中的maxPlayer * maxRoom计算。
   "maxplayers": 10,
 
   // 是否将MOTD作为地图名称显示。true=同步，false=使用房间名作为地图名。
@@ -60,12 +60,18 @@
   // 是否启用代理（仅当插件直接连接官方时需要）
   "proxy_enabled": false,
 
-  // 代理类型，SOCKS 或 HTTP
-  "proxy_type": "SOCKS",
+  // 代理类型，SOCKS 或 HTTP（请选择HTTP）
+  "proxy_type": "HTTP",
 
   // 代理服务器地址
   "proxy_host": "127.0.0.1",
 
   // 代理服务器端口
-  "proxy_port": 1080
+  "proxy_port": 1080,
+
+  // 代理凭证。若代理无需用户名密码请留空；若有则填入，会随请求发送 Base64 认证头。
+  "proxy_user": "",
+
+  // 代理密码。同上，注意配置文件是明文存放的，妥善保管。
+  "proxy_pass": ""
 }

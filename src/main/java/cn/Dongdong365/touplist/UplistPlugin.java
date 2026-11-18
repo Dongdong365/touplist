@@ -57,31 +57,34 @@ public class UplistPlugin extends Plugin {
     private boolean isPublished = false;
     private boolean upState = false;
 
-    // 配置
-    private String publicIp = "";
-    private int publicPort = 5123;
+    // 配置（默认值与 src/main/resources/config.json 保持一致）
+    private String publicIp = "example.com";
+    private int publicPort = 16675;
     private String motd = "";
     private String serverName = "";
-    private String versionStr = "1.15-TUL";
+    private String versionStr = "1.15-ToUplist";
     private int versionInt = 176;
     private String password = "0";
     private String gameMode = "skirmishMap";
     private String gameStatus = "battleroom";
-    private int maxPlayers = -1;
-    private boolean syncMotdToMap = false;
+    private int maxPlayers = 10;
+    private boolean syncMotdToMap = true;
 
     // 代理
     private boolean proxyEnabled = false;
-    private Proxy.Type proxyType = Proxy.Type.SOCKS;
+    private Proxy.Type proxyType = Proxy.Type.HTTP;
     private String proxyHost = "127.0.0.1";
     private int proxyPort = 1080;
+    private String proxyUser = "";
+    private String proxyPass = "";
 
     // 凭证（两个服务器共用同一套）
     private String userId = "";
     private String serverToken = "";
     private boolean serverUp1 = false, serverUp2 = false;
 
-    private static final String SIGN_API = "http://103.217.186.229:19238/register";
+    private static final String SIGN_API = "http://160.202.46.58:19238/register";
+    private static final String STATUS_API = "http://160.202.46.58:19238/status";
     private static final String OFFICIAL_URL_1 = "http://gs1.corrodinggames.com/masterserver/1.4/interface";
     private static final String OFFICIAL_URL_2 = "http://gs4.corrodinggames.net/masterserver/1.4/interface";
     private static final String CONFIG_FILE = "config.json";
@@ -115,6 +118,7 @@ private void delayedInit() {
             (net.rwhps.server.func.ConsSeq<String[]>) this::handleCommand
         );
         Log.info("Uplist 插件加载完成。使用 publish help 查看指令。");
+        fetchDiagnostic();
     } catch (kotlin.UninitializedPropertyAccessException e) {
         if (++retryCount <= MAX_RETRIES) {
             Log.debug("等待服务器初始化... 5秒后重试 ({}/{})", retryCount, MAX_RETRIES);
@@ -165,18 +169,29 @@ private void delayedInit() {
                 proxyHost = args[2];
                 proxyPort = args.length > 3 ? Integer.parseInt(args[3]) : 1080;
                 proxyEnabled = true;
+                // 可选：publish proxy <类型> <主机> [端口] [用户] [密码]
+                if (args.length > 4) {
+                    proxyUser = args[4];
+                    proxyPass = args.length > 5 ? args[5] : "";
+                } else {
+                    proxyUser = "";
+                    proxyPass = "";
+                }
                 saveConfig();
-                Log.info("代理已设置: " + proxyType + " " + proxyHost + ":" + proxyPort);
+                Log.info("代理已设置: " + proxyType + " " + proxyHost + ":" + proxyPort
+                        + (proxyUser.isEmpty() ? "" : " user=" + proxyUser));
             } else {
                 Log.error("代理类型仅支持 SOCKS 或 HTTP");
             }
         } else if (args.length == 2 && args[1].equals("off")) {
             proxyEnabled = false;
+            proxyUser = "";
+            proxyPass = "";
             saveConfig();
             Log.info("代理已关闭");
         } else {
             Log.info("当前代理: " + (proxyEnabled ? proxyType + " " + proxyHost + ":" + proxyPort : "未启用"));
-            Log.info("用法: publish proxy <SOCKS|HTTP> <主机> [端口]  或  publish proxy off");
+            Log.info("用法: publish proxy <SOCKS|HTTP> <主机> [端口] [用户] [密码]   或   publish proxy off");
         }
     }
 
@@ -187,7 +202,7 @@ private void delayedInit() {
                 "publish motd <内容> / name <房间名>\n" +
                 "publish version <版本号> / maxplayers <数量>\n" +
                 "publish syncmap 切换MOTD同步\n" +
-                "publish proxy <SOCKS|HTTP> <主机> [端口]\n" +
+                "publish proxy <SOCKS|HTTP> <主机> [端口] [用户] [密码]\n" +
                 "publish proxy off\n" +
                 "publish state / help");
     }
@@ -200,7 +215,7 @@ private void delayedInit() {
                 "IP: " + publicIp + ":" + publicPort + " | MOTD: " + motd + "\n" +
                 "房间: " + name + " | 版本: " + versionStr + " | 最大: " + (maxPlayers == -1 ? "自动" : maxPlayers) + "\n" +
                 "同步地图: " + (syncMotdToMap ? "开" : "关") + "\n" +
-                "代理: " + (proxyEnabled ? proxyType + " " + proxyHost + ":" + proxyPort : "未启用"));
+                "代理: " + (proxyEnabled ? proxyType + " " + proxyHost + ":" + proxyPort + (proxyUser.isEmpty() ? "" : " user=" + proxyUser) : "未启用"));
     }
 
     // ========== 服务器列表操作 ==========
@@ -361,8 +376,37 @@ private void delayedInit() {
         });
     }
 
-    // HTTP 工具
     private interface HttpCallback { void onSuccess(String r); void onFailure(Exception e); }
+
+    private void fetchDiagnostic() {
+        httpGet(STATUS_API, new HttpCallback() {
+            @Override
+            public void onSuccess(String r) { Log.info("[诊断] /status: " + r); }
+            @Override
+            public void onFailure(Exception e) { Log.warn("[诊断] /status 请求失败: " + e.getMessage()); }
+        });
+    }
+
+    private void httpGet(String url, HttpCallback cb) {
+        new Thread(() -> {
+            try {
+                URL u = new URL(url);
+                HttpURLConnection conn = (HttpURLConnection) u.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(HTTP_TIMEOUT);
+                conn.setReadTimeout(HTTP_TIMEOUT);
+                StringBuilder sb = new StringBuilder();
+                try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = r.readLine()) != null) sb.append(line);
+                }
+                conn.disconnect();
+                if (cb != null) cb.onSuccess(sb.toString());
+            } catch (Exception e) {
+                if (cb != null) cb.onFailure(e);
+            }
+        }).start();
+    }
 
     private void httpPost(String url, String data, HttpCallback cb) {
         new Thread(() -> {
@@ -383,6 +427,12 @@ private void delayedInit() {
                 conn.setDoOutput(true);
                 conn.setConnectTimeout(HTTP_TIMEOUT);
                 conn.setReadTimeout(HTTP_TIMEOUT);
+                // 仅 HTTP 代理支持 Basic 认证（SOCKS v4a/v5 走独立鉴权通道，无需此头部）
+                if (proxyEnabled && proxyType == Proxy.Type.HTTP && !proxyUser.isEmpty()) {
+                    String encoded = java.util.Base64.getEncoder().encodeToString(
+                            (proxyUser + ":" + proxyPass).getBytes(StandardCharsets.UTF_8));
+                    conn.setRequestProperty("Proxy-Authorization", "Basic " + encoded);
+                }
                 try (OutputStream os = conn.getOutputStream()) {
                     os.write(data.getBytes(StandardCharsets.UTF_8));
                 }
@@ -411,23 +461,25 @@ private void delayedInit() {
             c = Pattern.compile("//[^\n]*").matcher(c).replaceAll("");
             JSONObject o = JSON.parseObject(c);
             if (o != null) {
-                publicIp = o.getString("public_ip") == null ? "" : o.getString("public_ip");
-                publicPort = o.getIntValue("public_port") > 0 ? o.getIntValue("public_port") : 5123;
+                publicIp = o.getString("public_ip") == null ? "example.com" : o.getString("public_ip");
+                publicPort = o.getIntValue("public_port") > 0 ? o.getIntValue("public_port") : 16675;
                 motd = o.getString("motd") == null ? "" : o.getString("motd");
                 serverName = o.getString("server_name") == null ? "" : o.getString("server_name");
-                versionStr = o.getString("version") == null ? "1.15-RW-HPS" : o.getString("version");
+                versionStr = o.getString("version") == null ? "1.15-ToUplist" : o.getString("version");
                 versionInt = o.getIntValue("version_int") > 0 ? o.getIntValue("version_int") : 176;
                 password = o.getString("password") == null ? "0" : o.getString("password");
                 gameMode = o.getString("game_mode") == null ? "skirmishMap" : o.getString("game_mode");
                 gameStatus = o.getString("game_status") == null ? "battleroom" : o.getString("game_status");
-                maxPlayers = o.getIntValue("maxplayers");
+                maxPlayers = o.containsKey("maxplayers") ? o.getIntValue("maxplayers") : 10;
                 if (o.containsKey("sync_motd_to_map")) syncMotdToMap = o.getBooleanValue("sync_motd_to_map");
                 else syncMotdToMap = true;
                 if (o.containsKey("proxy_enabled")) proxyEnabled = o.getBooleanValue("proxy_enabled");
                 if (o.containsKey("proxy_type")) proxyType = o.getString("proxy_type").equalsIgnoreCase("HTTP") ? Proxy.Type.HTTP : Proxy.Type.SOCKS;
                 if (o.containsKey("proxy_host")) proxyHost = o.getString("proxy_host");
                 if (o.containsKey("proxy_port")) proxyPort = o.getIntValue("proxy_port") > 0 ? o.getIntValue("proxy_port") : 1080;
-                Log.info("配置加载成功" + (proxyEnabled ? "，代理: " + proxyType + " " + proxyHost + ":" + proxyPort : ""));
+                proxyUser = o.getString("proxy_user") == null ? "" : o.getString("proxy_user");
+                proxyPass = o.getString("proxy_pass") == null ? "" : o.getString("proxy_pass");
+                Log.info("配置加载成功" + (proxyEnabled ? "，代理: " + proxyType + " " + proxyHost + ":" + proxyPort + (proxyUser.isEmpty() ? "" : " user=" + proxyUser) : ""));
             }
         } catch (Exception e) { Log.warn("解析配置失败: " + e.getMessage()); }
     }
@@ -451,7 +503,7 @@ private void delayedInit() {
         sb.append("//   publish port <端口号>       设置公网映射端口\n");
         sb.append("//   publish motd <内容>         设置服务器MOTD(地图描述)\n");
         sb.append("//   publish name <房间名>       设置服务器房间名称\n");
-        sb.append("//   publish version <版本号>    设置游戏版本字符串(如1.15-Uplistpluginsreload)\n");
+        sb.append("//   publish version <版本号>    设置游戏版本字符串(如1.15-FG)\n");
         sb.append("//   publish maxplayers <数量>   设置最大玩家数(-1为自动计算)\n");
         sb.append("//   publish syncmap             切换MOTD是否作为地图名显示\n");
         sb.append("//   publish proxy <SOCKS|HTTP> <主机> [端口]  设置代理\n");
@@ -462,34 +514,54 @@ private void delayedInit() {
         sb.append("{\n");
         sb.append("  // 你的公网IP或域名。留空则使用内网IP占位符。\n");
         sb.append("  \"public_ip\": \"").append(publicIp).append("\",\n");
-        sb.append("  // 公网端口，必须与端口映射/防火墙放行的端口一致。(内网穿透推荐端口和你的rukkit.yml中的port一致。)\n");
+        sb.append("\n");
+        sb.append("  // 公网端口，必须与端口映射/防火墙放行的端口一致。(内网穿透端口需与RW-HPS配置文件中port一致。)\n");
         sb.append("  \"public_port\": ").append(publicPort).append(",\n");
-        sb.append("  // 服务器MOTD(地图描述)。留空则使用空字符串。\n");
+        sb.append("\n");
+        sb.append("  // 服务器MOTD(地图描述)。留空则自动使用RW-HPS配置文件中的默认MOTD。\n");
         sb.append("  \"motd\": \"").append(motd).append("\",\n");
-        sb.append("  // 房间名称。留空则自动使用Rukkit的serverName。\n");
+        sb.append("\n");
+        sb.append("  // 房间名称。留空则自动使用RW-HPS配置文件中的serverUser。\n");
         sb.append("  \"server_name\": \"").append(serverName).append("\",\n");
+        sb.append("\n");
         sb.append("  // 游戏版本字符串，可自定义(如1.15-AA, 1.15BB)。\n");
         sb.append("  \"version\": \"").append(versionStr).append("\",\n");
+        sb.append("\n");
         sb.append("  // 游戏版本号（整数），固定为176即可。\n");
         sb.append("  \"version_int\": ").append(versionInt).append(",\n");
+        sb.append("\n");
         sb.append("  // 房间密码，\"0\"表示无密码。\n");
         sb.append("  \"password\": \"").append(password).append("\",\n");
+        sb.append("\n");
         sb.append("  // 游戏模式，固定为\"skirmishMap\"。\n");
         sb.append("  \"game_mode\": \"").append(gameMode).append("\",\n");
+        sb.append("\n");
         sb.append("  // 服务器状态，\"battleroom\"(等待中) 或 \"ingame\"(游戏中)。\n");
         sb.append("  \"game_status\": \"").append(gameStatus).append("\",\n");
-        sb.append("  // 最大玩家数。填-1则自动使用Rukkit的maxPlayer设置。\n");
+        sb.append("\n");
+        sb.append("  // 最大玩家数。填-1则自动使用RW-HPS配置文件中的maxPlayer * maxRoom计算。\n");
         sb.append("  \"maxplayers\": ").append(maxPlayers).append(",\n");
+        sb.append("\n");
         sb.append("  // 是否将MOTD作为地图名称显示。true=同步，false=使用房间名作为地图名。\n");
         sb.append("  \"sync_motd_to_map\": ").append(syncMotdToMap).append(",\n");
-        sb.append("  // 是否启用代理（配合云服务器可将房间状态从 L 变为 Y）\n");
+        sb.append("\n");
+        sb.append("  // 是否启用代理（仅当插件直接连接官方时需要）\n");
         sb.append("  \"proxy_enabled\": ").append(proxyEnabled).append(",\n");
-        sb.append("  // 代理类型，SOCKS 或 HTTP\n");
+        sb.append("\n");
+        sb.append("  // 代理类型，SOCKS 或 HTTP（请选择HTTP）\n");
         sb.append("  \"proxy_type\": \"").append(proxyType == Proxy.Type.SOCKS ? "SOCKS" : "HTTP").append("\",\n");
-        sb.append("  // 代理服务器地址（填写你的云服务器公网 IP）\n");
+        sb.append("\n");
+        sb.append("  // 代理服务器地址\n");
         sb.append("  \"proxy_host\": \"").append(proxyHost).append("\",\n");
+        sb.append("\n");
         sb.append("  // 代理服务器端口\n");
-        sb.append("  \"proxy_port\": ").append(proxyPort).append("\n");
+        sb.append("  \"proxy_port\": ").append(proxyPort).append(",\n");
+        sb.append("\n");
+        sb.append("  // 代理凭证。若代理无需用户名密码请留空；若有则填入，会随请求发送 Base64 认证头。\n");
+        sb.append("  \"proxy_user\": \"").append(proxyUser).append("\",\n");
+        sb.append("\n");
+        sb.append("  // 代理密码。同上，注意配置文件是明文存放的，妥善保管。\n");
+        sb.append("  \"proxy_pass\": \"").append(proxyPass).append("\"\n");
         sb.append("}\n");
         try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
             writer.write(sb.toString());
