@@ -6,11 +6,9 @@ on:
 
 jobs:
   release:
-    environment: release
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 必须权限，用于上传Release附件
-
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -27,20 +25,17 @@ jobs:
       - name: Change wrapper permissions
         run: chmod +x ./gradlew
 
-      - name: Publish
+      - name: Run build
         run: ./gradlew build
 
-      - name: Attach JAR to GitHub Release
+      - name: Select largest jar
+        id: jarfile
+        run: |
+          JAR_FILE=$(ls -S build/libs/*.jar | head -1)
+          echo "jar=${JAR_FILE}" >> $GITHUB_OUTPUT
+
+      - name: Attach jar to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/libs/*.jar
+          files: ${{ steps.jarfile.outputs.jar }}
           generate_release_notes: true
-          append_body: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Upload built JARs
-        uses: actions/upload-artifact@v7
-        with:
-          path: ${{ steps.jarpath.outputs.jar }}
-          archive: false

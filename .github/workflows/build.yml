@@ -33,8 +33,19 @@ jobs:
       - name: Run build with Gradle Wrapper
         run: ./gradlew build
 
-      - name: Upload built JARs
+      - name: List all jars
+        run: ls -la build/libs/
+
+      - name: Select largest jar（shadow打包的fat包）
+        id: jarfile
+        run: |
+          # 按文件大小排序，取最大的那个jar（shadow胖包体积远大于普通jar）
+          JAR_FILE=$(ls -S build/libs/*.jar | head -1)
+          echo "jar=${JAR_FILE}" >> $GITHUB_OUTPUT
+          echo "Selected jar: ${JAR_FILE}"
+
+      - name: Upload JAR directly (no zip)
         uses: actions/upload-artifact@v7
         with:
-          path: ${{ steps.jarpath.outputs.jar }}
+          path: ${{ steps.jarfile.outputs.jar }}
           archive: false
