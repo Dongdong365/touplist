@@ -1,0 +1,70 @@
+# ===================================================================
+#  不要试图更改格式，请更改能更改的区域
+#  (开过 Minecraft / 铁锈战争的腐竹们不可能不知道吧:)
+#  任何更改其格式都可能导致插件爆炸
+#
+#  铁锈战争 Uplist 插件配置文件
+#  修改后请使用命令 "publish reload" 热重载，或重启服务器生效。
+#
+# ── 基础信息 ───────────────────────────────────────────────────────
+
+# 你的公网IP或域名。留空则使用内网IP占位符。
+public_ip: 必须修改
+
+# 公网端口，必须与端口映射/防火墙放行的端口一致。（内网穿透端口需与RW-HPS配置文件中port一致。）
+public_port: 必须修改
+
+# 房间名称。留空则自动使用RW-HPS配置文件中的serverUser。
+server_name: ""
+
+# 游戏版本字符串，可自定义(如1.15-AA、1.15BB)。
+version: "1.15-ToUplist"
+
+# 游戏版本号（整数），固定为176即可。
+version_int: 176
+
+# ── 房间设置 ───────────────────────────────────────────────────────
+
+# 房间密码，0表示无密码。
+password: "0"
+
+# 游戏模式，固定为 skirmishMap。
+game_mode: skirmishMap
+
+# 状态同步开关：true=跟随RW-HPS房间状态，false=使用下方手动game_status。
+# 自动模式：战役室/等待中为battleroom，开始游戏为ingame，返回战役室后恢复battleroom。
+# 状态随下一次列表上报更新（正常每15秒一次）。修改配置后使用 publish reload。
+sync_game_status: true
+
+# 手动列表状态，仅在sync_game_status为false时生效。
+# 只允许 battleroom（战役室/等待中）或 ingame（游戏中）。不会改变服务器实际游戏状态。
+game_status: battleroom
+
+# 最大玩家数。填-1则自动使用RW-HPS配置文件中的maxPlayer * maxRoom计算。
+maxplayers: 10
+
+# ── 地图显示 ───────────────────────────────────────────────────────
+
+# true=同步RW-HPS当前实际地图名；false=使用下方自定义MOTD。两者均保留完整内容。
+sync_motd_to_map: true
+
+# 自定义MOTD：仅在上方地图同步关闭(false)时生效；留空则显示空字符串。
+motd: ""
+
+# ── 网络代理 ───────────────────────────────────────────────────────
+
+# 是否启用代理（仅当插件直接连接官方时需要，默认走 SIGN_API 不需要）
+proxy_enabled: false
+
+# 代理类型：SOCKS 或 HTTP（请选择HTTP）。填错会自动回退到 SOCKS。
+proxy_type: HTTP
+
+# 代理服务器地址（如 127.0.0.1 或 socks.example.com）
+proxy_host: "127.0.0.1"
+
+# 代理服务器端口
+proxy_port: 1080
+
+# 代理凭证。若代理无需用户名密码请留空；若有则填入，会随请求发送 Base64 认证头。
+proxy_user: ""
+proxy_pass: ""

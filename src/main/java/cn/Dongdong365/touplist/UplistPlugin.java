@@ -37,93 +37,100 @@ package com.cn.Dongdong365.touplist;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import net.rwhps.server.data.global.Data;
+import net.rwhps.server.game.GameMaps;
 import net.rwhps.server.game.manage.HeadlessModuleManage;
 import net.rwhps.server.game.room.ServerRoom;
 import net.rwhps.server.plugin.Plugin;
+import net.rwhps.server.util.game.command.CommandHandler;
 import net.rwhps.server.util.log.Log;
+
+import org.yaml.snakeyaml.Yaml;
 
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 public class UplistPlugin extends Plugin {
 
     private ScheduledExecutorService scheduler;
+    /** 续期任务是否正在运行（与 isPublished/upState 独立，避免受 onEnable 预创建 scheduler 影响） */
+    private boolean renewing = false;
     private boolean isPublished = false;
     private boolean upState = false;
 
-    // 配置
-    private String publicIp = "";
-    private int publicPort = 5123;
+    // 互斥锁：同一时刻只允许一个上架/下架/更新任务（覆盖签名+两个官方请求全程）
+    private final java.util.concurrent.atomic.AtomicBoolean opBusy = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    // 配置（默认值与 src/main/resources/config.json 保持一致）
+    private String publicIp = "example.com";
+    private int publicPort = 16675;
     private String motd = "";
     private String serverName = "";
-    private String versionStr = "1.15-TUL";
+    private String versionStr = "1.15-ToUplist";
     private int versionInt = 176;
     private String password = "0";
     private String gameMode = "skirmishMap";
-    private String gameStatus = "battleroom";
-    private int maxPlayers = -1;
-    private boolean syncMotdToMap = false;
+    private volatile String gameStatus = "battleroom";
+    private volatile boolean syncGameStatus = true;
+    private int maxPlayers = 10;
+    private boolean syncMotdToMap = true;
 
     // 代理
     private boolean proxyEnabled = false;
-    private Proxy.Type proxyType = Proxy.Type.SOCKS;
+    private Proxy.Type proxyType = Proxy.Type.HTTP;
     private String proxyHost = "127.0.0.1";
     private int proxyPort = 1080;
+    private String proxyUser = "";
+    private String proxyPass = "";
 
     // 凭证（两个服务器共用同一套）
     private String userId = "";
     private String serverToken = "";
     private boolean serverUp1 = false, serverUp2 = false;
 
-    private static final String SIGN_API = "http://103.217.186.229:19238/register";
+    private static final String SIGN_API = "http://160.202.46.58:19238/register";
+    private static final String STATUS_API = "http://160.202.46.58:19238/status";
     private static final String OFFICIAL_URL_1 = "http://gs1.corrodinggames.com/masterserver/1.4/interface";
     private static final String OFFICIAL_URL_2 = "http://gs4.corrodinggames.net/masterserver/1.4/interface";
-    private static final String CONFIG_FILE = "config.json";
+    private static final String CONFIG_FILE = "config.yml";
     private static final int HTTP_TIMEOUT = 20000;
 
-private ServerRoom room;
-
-@Override
-public void onEnable() {
-    scheduler = Executors.newSingleThreadScheduledExecutor();
-    new RemoteVersionChecker().checkAndLog();
-    try {
-        loadConfig();
-        // 延迟1秒后尝试初始化
-        scheduler.schedule(this::delayedInit, 1, TimeUnit.SECONDS);
-    } catch (Exception e) {
-        Log.error("配置加载失败", e);
-    }
-}
-
-private int retryCount = 0;
-private static final int MAX_RETRIES = 20;
-
-private void delayedInit() {
-    try {
-        room = HeadlessModuleManage.INSTANCE.getHps().getRoom();
-        Data.SERVER_COMMAND.register(
+/**
+     * 注册服务器命令（框架在加载插件时调用，handler 即 Data.SERVER_COMMAND）。
+     * 命令注册与 room 初始化解耦，执行时才按需取 room。
+     */
+    @Override
+    public void registerServerCommands(CommandHandler handler) {
+        handler.register(
             "publish",
             "<子命令> [参数...]",
             "列表公开插件命令",
             (net.rwhps.server.func.ConsSeq<String[]>) this::handleCommand
         );
+    }
+
+    public void onEnable() {
+    scheduler = Executors.newSingleThreadScheduledExecutor();
+    new RemoteVersionChecker().checkAndLog();
+    try {
+        loadConfig();
         Log.info("Uplist 插件加载完成。使用 publish help 查看指令。");
-    } catch (kotlin.UninitializedPropertyAccessException e) {
-        if (++retryCount <= MAX_RETRIES) {
-            Log.debug("等待服务器初始化... 5秒后重试 ({}/{})", retryCount, MAX_RETRIES);
-            scheduler.schedule(this::delayedInit, 5, TimeUnit.SECONDS);
-        } else {
-            Log.warn("Uplist 插件初始化失败：服务器未能在预期时间内完成初始化。请重启服务端。", e);
-        }
+        fetchDiagnostic();
     } catch (Exception e) {
-        Log.error("Uplist 插件初始化失败", e);
+        Log.error("配置加载失败，尝试解决或备份配置文件后删除以重新生成", e);
     }
 }
 
@@ -146,11 +153,26 @@ private void delayedInit() {
             case "reload": loadConfig(); Log.info("配置已重载"); break;
             case "ip": if (args.length > 1) { publicIp = args[1]; saveConfig(); Log.info("IP 已设为: " + publicIp); if (isPublished) updateServer(); } else Log.info("当前 IP: " + (publicIp.isEmpty() ? "未设置" : publicIp)); break;
             case "port": if (args.length > 1) { try { publicPort = Integer.parseInt(args[1]); saveConfig(); Log.info("端口: " + publicPort); if (isPublished) updateServer(); } catch (NumberFormatException e) { Log.error("无效端口"); } } else Log.info("当前端口: " + publicPort); break;
-            case "motd": if (args.length > 1) { motd = args[1]; saveConfig(); Log.info("MOTD: " + motd); if (isPublished) updateServer(); } else Log.info("当前 MOTD: " + (motd.isEmpty() ? "(默认)" : motd)); break;
+            case "motd": if (args.length > 1) { motd = args[1]; saveConfig(); Log.info("MOTD: " + motd); if (isPublished) updateServer(); } else Log.info("当前 MOTD: " + (motd.isEmpty() ? "(空)" : motd)); break;
             case "name": if (args.length > 1) { serverName = args[1]; saveConfig(); Log.info("房间名: " + serverName); if (isPublished) updateServer(); } else { String n = serverName.isEmpty() ? Data.config.getServerName() : serverName; Log.info("房间名: " + n); } break;
             case "version": if (args.length > 1) { versionStr = args[1]; saveConfig(); Log.info("版本: " + versionStr); if (isPublished) updateServer(); } else Log.info("当前版本: " + versionStr); break;
             case "maxplayers": if (args.length > 1) { try { maxPlayers = Integer.parseInt(args[1]); saveConfig(); Log.info("最大玩家: " + (maxPlayers == -1 ? "自动" : maxPlayers)); if (isPublished) updateServer(); } catch (NumberFormatException e) { Log.error("无效数字"); } } else Log.info("当前最大玩家: " + (maxPlayers == -1 ? "自动" : maxPlayers)); break;
-            case "syncmap": syncMotdToMap = !syncMotdToMap; saveConfig(); Log.info("同步地图: " + (syncMotdToMap ? "开" : "关")); if (isPublished) updateServer(); break;
+            case "syncmap": syncMotdToMap = !syncMotdToMap; saveConfig(); Log.info("同步地图: " + (syncMotdToMap ? "开（实际地图）" : "关（自定义MOTD）")); if (isPublished) updateServer(); break;
+            case "syncstatus": syncGameStatus = !syncGameStatus; saveConfig(); Log.info("状态同步: " + (syncGameStatus ? "开（实际房间状态）" : "关（手动game_status）")); if (isPublished) updateServer(); break;
+            case "status":
+                if (args.length > 1) {
+                    try {
+                        gameStatus = normalizeGameStatus(args[1]);
+                        saveConfig();
+                        Log.info("手动列表状态: " + gameStatus + (syncGameStatus ? "（状态同步开启，关闭后生效）" : ""));
+                        if (isPublished && !syncGameStatus) updateServer();
+                    } catch (IllegalArgumentException e) {
+                        Log.error(e.getMessage());
+                    }
+                } else {
+                    Log.info("手动列表状态: " + gameStatus + " | 状态同步: " + (syncGameStatus ? "开" : "关"));
+                }
+                break;
             case "proxy": handleProxyArgs(args); break;
             case "state": printState(); break;
             default: printHelp();
@@ -165,18 +187,29 @@ private void delayedInit() {
                 proxyHost = args[2];
                 proxyPort = args.length > 3 ? Integer.parseInt(args[3]) : 1080;
                 proxyEnabled = true;
+                // 可选：publish proxy <类型> <主机> [端口] [用户] [密码]
+                if (args.length > 4) {
+                    proxyUser = args[4];
+                    proxyPass = args.length > 5 ? args[5] : "";
+                } else {
+                    proxyUser = "";
+                    proxyPass = "";
+                }
                 saveConfig();
-                Log.info("代理已设置: " + proxyType + " " + proxyHost + ":" + proxyPort);
+                Log.info("代理已设置: " + proxyType + " " + proxyHost + ":" + proxyPort
+                        + (proxyUser.isEmpty() ? "" : " user=" + proxyUser));
             } else {
                 Log.error("代理类型仅支持 SOCKS 或 HTTP");
             }
         } else if (args.length == 2 && args[1].equals("off")) {
             proxyEnabled = false;
+            proxyUser = "";
+            proxyPass = "";
             saveConfig();
             Log.info("代理已关闭");
         } else {
             Log.info("当前代理: " + (proxyEnabled ? proxyType + " " + proxyHost + ":" + proxyPort : "未启用"));
-            Log.info("用法: publish proxy <SOCKS|HTTP> <主机> [端口]  或  publish proxy off");
+            Log.info("用法: publish proxy <SOCKS|HTTP> <主机> [端口] [用户] [密码]   或   publish proxy off");
         }
     }
 
@@ -186,44 +219,87 @@ private void delayedInit() {
                 "publish ip <IP> / port <端口>\n" +
                 "publish motd <内容> / name <房间名>\n" +
                 "publish version <版本号> / maxplayers <数量>\n" +
-                "publish syncmap 切换MOTD同步\n" +
-                "publish proxy <SOCKS|HTTP> <主机> [端口]\n" +
+                "publish syncmap 切换地图同步（开=实际地图，关=自定义MOTD）\n" +
+                "publish syncstatus 切换状态同步（开=实际状态，关=手动game_status）\n" +
+                "publish status <battleroom|ingame> 设置手动列表状态\n" +
+                "publish proxy <SOCKS|HTTP> <主机> [端口] [用户] [密码]\n" +
                 "publish proxy off\n" +
                 "publish state / help");
     }
 
     private void printState() {
         String name = serverName.isEmpty() ? Data.config.getServerName() : serverName;
+        String actualStatus = "未初始化";
+        try {
+            actualStatus = selectListGameStatus(true, HeadlessModuleManage.INSTANCE.getHps().getRoom().isStartGame(), gameStatus);
+        } catch (Exception ignored) { }
         Log.info("== 状态 ==\n" +
                 "公开: " + (isPublished ? "是" : "否") + " | 在线: " + (upState ? "是" : "否") + "\n" +
                 "gs1 在线: " + (serverUp1 ? "是" : "否") + " | gs4 在线: " + (serverUp2 ? "是" : "否") + "\n" +
                 "IP: " + publicIp + ":" + publicPort + " | MOTD: " + motd + "\n" +
                 "房间: " + name + " | 版本: " + versionStr + " | 最大: " + (maxPlayers == -1 ? "自动" : maxPlayers) + "\n" +
-                "同步地图: " + (syncMotdToMap ? "开" : "关") + "\n" +
-                "代理: " + (proxyEnabled ? proxyType + " " + proxyHost + ":" + proxyPort : "未启用"));
+                "同步地图: " + (syncMotdToMap ? "开（实际地图）" : "关（自定义MOTD）") + "\n" +
+                "列表游戏状态: " + (syncGameStatus ? actualStatus : gameStatus) + " | 状态同步: " + (syncGameStatus ? "开" : "关") + "\n" +
+                "实际房间状态: " + actualStatus + " | 手动game_status: " + gameStatus + "\n" +
+                "代理: " + (proxyEnabled ? proxyType + " " + proxyHost + ":" + proxyPort + (proxyUser.isEmpty() ? "" : " user=" + proxyUser) : "未启用"));
     }
 
     // ========== 服务器列表操作 ==========
     private void addServer() { userId = ""; sendRequest("add"); }
     private void updateServer() { if (userId.isEmpty()) { addServer(); return; } sendRequest("update"); }
     private void stopServer() {
-        if (userId.isEmpty()) { Log.info("无凭证，无法停止"); return; }
         sendRequest("remove");
-        if (scheduler != null) scheduler.shutdownNow();
-        isPublished = false; upState = false;
+        if (scheduler != null && !scheduler.isShutdown()) {
+            scheduler.shutdownNow();
+        }
+        scheduler = null;
+        renewing = false; isPublished = false; upState = false;
+        userId = ""; serverToken = "";
         serverUp1 = false; serverUp2 = false;
     }
 
+    static String selectListMapName(boolean syncMap, GameMaps maps, String customMotd) {
+        return syncMap ? maps.getMapName() : customMotd;
+    }
+
+    static String selectListGameStatus(boolean syncStatus, boolean isStartGame, String customStatus) {
+        return syncStatus ? (isStartGame ? "ingame" : "battleroom") : customStatus;
+    }
+
+    static String normalizeGameStatus(Object value) {
+        if (value == null || value instanceof String && ((String) value).trim().isEmpty()) {
+            return "battleroom";
+        }
+        if (value instanceof String) {
+            String status = ((String) value).trim().toLowerCase(Locale.ROOT);
+            if (status.equals("battleroom") || status.equals("ingame")) return status;
+        }
+        throw new IllegalArgumentException("game_status 只允许 battleroom 或 ingame");
+    }
+
     private void sendRequest(String action) {
+        // 惰性获取 room：服务器未初始化完成时提示并返回
+        ServerRoom r;
+        try {
+            r = HeadlessModuleManage.INSTANCE.getHps().getRoom();
+        } catch (Exception e) {
+            Log.warn("服务器尚未初始化完成，请稍后再试");
+            return;
+        }
+        // 互斥锁：同一时刻只允许一个上架/下架/更新任务，防止重复注册
+        if (!opBusy.compareAndSet(false, true)) {
+            Log.warn("已有上架/下架/更新任务在进行中，请稍后再试");
+            return;
+        }
         // 使用核心配置获取端口和服务器名
         int port = publicPort > 0 ? publicPort : Data.config.getPort();
         String ip = publicIp.isEmpty() ? "10.0.0.1" : publicIp;
         String name = serverName.isEmpty() ? Data.config.getServerName() : serverName;
-        String curMotd = motd.isEmpty() ? "" : motd;
         int max = maxPlayers == -1 ? Data.configServer.getMaxPlayer() : maxPlayers;
-        int players = room.getPlayerManage().playerGroup.size();
-        String status = room.isStartGame() ? "ingame" : "battleroom";
-        String curMap = syncMotdToMap ? curMotd : name;
+        int players = r.getPlayerManage().playerGroup.size();
+        String status = selectListGameStatus(syncGameStatus, r.isStartGame(), gameStatus);
+        // true 同步当前实际地图；false 使用插件自定义 MOTD。每次上报实时读取，不截断。
+        String curMap = selectListMapName(syncMotdToMap, r.getMaps(), motd);
 
         StringBuilder apiParams = new StringBuilder();
         apiParams.append("action=").append(action)
@@ -253,17 +329,21 @@ private void delayedInit() {
                         userId = obj.getString("user_id");
                         serverToken = obj.getString("server_token");
                         Log.debug("签名成功，同时发送到两个官方服务器...");
+                        // 锁在 sendToBothServers 两个官方请求全部回调后释放
                         sendToBothServers(signedBody, action, userId, serverToken);
                     } else {
                         Log.error("签名 API 返回错误: " + response);
+                        opBusy.set(false);
                     }
                 } catch (Exception e) {
                     Log.error("解析签名 API 响应失败: " + response, e);
+                    opBusy.set(false);
                 }
             }
             @Override
             public void onFailure(Exception e) {
                 Log.error("签名 API 请求失败: " + e.getMessage());
+                opBusy.set(false);
             }
         });
     }
@@ -272,8 +352,20 @@ private void delayedInit() {
         if ("add".equals(action)) {
             Log.info("正在向官方服务器注册（超时20秒）...");
         }
-        httpPost(OFFICIAL_URL_1, signedBody, buildCallback(1, action));
-        httpPost(OFFICIAL_URL_2, signedBody, buildCallback(2, action));
+        // 两个官方请求都回调（成功或失败）后释放互斥锁
+        java.util.concurrent.atomic.AtomicInteger remaining = new java.util.concurrent.atomic.AtomicInteger(2);
+        Runnable onEach = () -> { if (remaining.decrementAndGet() <= 0) opBusy.set(false); };
+        httpPost(OFFICIAL_URL_1, signedBody, wrapDone(buildCallback(1, action), onEach));
+        httpPost(OFFICIAL_URL_2, signedBody, wrapDone(buildCallback(2, action), onEach));
+    }
+
+    private HttpCallback wrapDone(HttpCallback inner, Runnable onDone) {
+        return new HttpCallback() {
+            @Override
+            public void onSuccess(String r) { try { inner.onSuccess(r); } finally { onDone.run(); } }
+            @Override
+            public void onFailure(Exception e) { try { inner.onFailure(e); } finally { onDone.run(); } }
+        };
     }
 
     private HttpCallback buildCallback(int serverNum, String action) {
@@ -312,14 +404,17 @@ private void delayedInit() {
         upState = serverUp1 || serverUp2;
 
         // 任一服务器在线则启动定时上报
-        if (upState && (scheduler == null || scheduler.isShutdown())) {
+        if (upState && !renewing) {
+            renewing = true;
             scheduler = Executors.newSingleThreadScheduledExecutor();
             scheduler.scheduleAtFixedRate(this::updateServer, 15, 15, TimeUnit.SECONDS);
-            Log.info("服务器已公开！");
+            Log.info("服务器已公开！每15秒自动续期。");
             sendSelfInfo();
-        } else if (!upState) {
+        } else if (!upState && renewing) {
+            renewing = false;
             if (scheduler != null && !scheduler.isShutdown()) {
                 scheduler.shutdownNow();
+                scheduler = null;
             }
         }
     }
@@ -348,27 +443,81 @@ private void delayedInit() {
                             public void onSuccess(String r2) {
                                 Log.debug(label + " 自检返回: " + r2);
                                 if (r2.contains("true")) Log.info(label + " 端口开放，公网状态 Y！");
-                                else Log.warn(label + " 端口未开放，你没有开放到列表。内网穿透玩家请检查 UDP/TCP 映射配置是否正确，代理是否开启。提交的ip是否正确，公网ip的防火墙是否打开。");
+                                else Log.error(label + " 端口未开放，你没有开放到列表。内网穿透玩家请检查 UDP/TCP 映射配置是否正确，代理是否开启。提交的ip是否正确，公网ip的防火墙是否打开。");
                             }
                             @Override
-                            public void onFailure(Exception e) { Log.warn(label + " 自检请求失败: " + e.getMessage()); }
+                            public void onFailure(Exception e) { Log.error(label + " 自检请求失败: " + e.getMessage()); }
                         });
                     }
-                } catch (Exception e) { Log.warn(label + " 解析自检签名响应失败", e); }
+                } catch (Exception e) { Log.error(label + " 解析自检签名响应失败：", e); }
             }
             @Override
-            public void onFailure(Exception e) { Log.warn(label + " 自检签名请求失败: " + e.getMessage()); }
+            public void onFailure(Exception e) { Log.error(label + " 自检签名请求失败: " + e.getMessage()); }
         });
     }
 
-    // HTTP 工具
     private interface HttpCallback { void onSuccess(String r); void onFailure(Exception e); }
+
+    private void fetchDiagnostic() {
+        httpGet(STATUS_API, new HttpCallback() {
+            @Override
+            public void onSuccess(String r) { Log.info("[诊断] 签名服务器在线: " + r); }
+            @Override
+            public void onFailure(Exception e) { Log.error("[诊断] 连接签名服务器 失败，无法确认签名API是否在线。请访问签名API的监控系统(在仓库内Dongdong365/ToUpList-API-Whitelist)查看在线状态。失败原因： " + e.getMessage()); }
+        });
+    }
+
+    private void httpGet(String url, HttpCallback cb) {
+        new Thread(() -> {
+            HttpURLConnection conn = null;
+            try {
+                URL u = new URL(url);
+                conn = (HttpURLConnection) u.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(HTTP_TIMEOUT);
+                conn.setReadTimeout(HTTP_TIMEOUT);
+                StringBuilder sb = new StringBuilder();
+                try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = r.readLine()) != null) sb.append(line);
+                }
+                conn.disconnect();
+                if (cb != null) cb.onSuccess(sb.toString());
+            } catch (Exception e) {
+                if (cb != null) cb.onFailure(new IOException(enrichError(conn, e)));
+            }
+        }).start();
+    }
+
+    /** 请求失败时把服务端返回的错误体（如 400 的响应原因）拼进异常信息，便于排查。 */
+    private String enrichError(HttpURLConnection conn, Exception e) {
+        String original = e.getMessage();
+        try {
+            if (conn != null) {
+                int code = conn.getResponseCode();
+                if (code >= 400) {
+                    StringBuilder eb = new StringBuilder();
+                    try (java.io.InputStream es = conn.getErrorStream()) {
+                        if (es != null) {
+                            java.io.BufferedReader er = new java.io.BufferedReader(new java.io.InputStreamReader(es, StandardCharsets.UTF_8));
+                            String l;
+                            while ((l = er.readLine()) != null) eb.append(l);
+                        }
+                    }
+                    if (eb.length() > 0) {
+                        return "HTTP " + code + " 响应: " + eb + "（原始: " + original + "）";
+                    }
+                }
+            }
+        } catch (Exception ignore) { }
+        return original;
+    }
 
     private void httpPost(String url, String data, HttpCallback cb) {
         new Thread(() -> {
+            HttpURLConnection conn = null;
             try {
                 URL u = new URL(url);
-                HttpURLConnection conn;
                 if (url.startsWith(SIGN_API)) {
                     conn = (HttpURLConnection) u.openConnection(Proxy.NO_PROXY);
                 } else if (proxyEnabled) {
@@ -383,6 +532,12 @@ private void delayedInit() {
                 conn.setDoOutput(true);
                 conn.setConnectTimeout(HTTP_TIMEOUT);
                 conn.setReadTimeout(HTTP_TIMEOUT);
+                // 仅 HTTP 代理支持 Basic 认证（SOCKS v4a/v5 走独立鉴权通道，无需此头部）
+                if (proxyEnabled && proxyType == Proxy.Type.HTTP && !proxyUser.isEmpty()) {
+                    String encoded = java.util.Base64.getEncoder().encodeToString(
+                            (proxyUser + ":" + proxyPass).getBytes(StandardCharsets.UTF_8));
+                    conn.setRequestProperty("Proxy-Authorization", "Basic " + encoded);
+                }
                 try (OutputStream os = conn.getOutputStream()) {
                     os.write(data.getBytes(StandardCharsets.UTF_8));
                 }
@@ -394,105 +549,228 @@ private void delayedInit() {
                 conn.disconnect();
                 if (cb != null) cb.onSuccess(sb.toString());
             } catch (Exception e) {
-                if (cb != null) cb.onFailure(e);
+                if (cb != null) cb.onFailure(new IOException(enrichError(conn, e)));
             }
         }).start();
     }
 
     private String urlEncode(String v) { try { return URLEncoder.encode(v, StandardCharsets.UTF_8.toString()); } catch (Exception e) { return v; } }
 
-    // 配置文件管理
+    // 配置文件管理（YAML 格式，支持标准 # 行注释，SnakeYAML 原生解析）
     private void loadConfig() {
         File f = new File(CONFIG_FILE);
-        if (!f.exists()) { saveConfig(); return; }
-        try {
-            String c = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
-            c = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL).matcher(c).replaceAll("");
-            c = Pattern.compile("//[^\n]*").matcher(c).replaceAll("");
-            JSONObject o = JSON.parseObject(c);
-            if (o != null) {
-                publicIp = o.getString("public_ip") == null ? "" : o.getString("public_ip");
-                publicPort = o.getIntValue("public_port") > 0 ? o.getIntValue("public_port") : 5123;
-                motd = o.getString("motd") == null ? "" : o.getString("motd");
-                serverName = o.getString("server_name") == null ? "" : o.getString("server_name");
-                versionStr = o.getString("version") == null ? "1.15-RW-HPS" : o.getString("version");
-                versionInt = o.getIntValue("version_int") > 0 ? o.getIntValue("version_int") : 176;
-                password = o.getString("password") == null ? "0" : o.getString("password");
-                gameMode = o.getString("game_mode") == null ? "skirmishMap" : o.getString("game_mode");
-                gameStatus = o.getString("game_status") == null ? "battleroom" : o.getString("game_status");
-                maxPlayers = o.getIntValue("maxplayers");
-                if (o.containsKey("sync_motd_to_map")) syncMotdToMap = o.getBooleanValue("sync_motd_to_map");
-                else syncMotdToMap = true;
-                if (o.containsKey("proxy_enabled")) proxyEnabled = o.getBooleanValue("proxy_enabled");
-                if (o.containsKey("proxy_type")) proxyType = o.getString("proxy_type").equalsIgnoreCase("HTTP") ? Proxy.Type.HTTP : Proxy.Type.SOCKS;
-                if (o.containsKey("proxy_host")) proxyHost = o.getString("proxy_host");
-                if (o.containsKey("proxy_port")) proxyPort = o.getIntValue("proxy_port") > 0 ? o.getIntValue("proxy_port") : 1080;
-                Log.info("配置加载成功" + (proxyEnabled ? "，代理: " + proxyType + " " + proxyHost + ":" + proxyPort : ""));
+        if (!f.exists()) {
+            // 首次运行：从 classpath 的 resources/config.yml 模板原样释放到工作目录
+            if (releaseDefaultConfig(f)) {
+                Log.info("已生成默认配置文件 " + CONFIG_FILE + "（来自内置模板）");
+            } else {
+                Log.warn("未找到内置模板，使用代码默认值生成 " + CONFIG_FILE);
+                saveConfig();
             }
+        }
+        try {
+            org.yaml.snakeyaml.DumperOptions opts = new org.yaml.snakeyaml.DumperOptions();
+            opts.setIndent(2);
+            opts.setDefaultFlowStyle(org.yaml.snakeyaml.DumperOptions.FlowStyle.BLOCK);
+            org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(opts);
+            Map<String, Object> m;
+            try (InputStreamReader reader = new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8)) {
+                m = yaml.load(reader);
+            }
+            if (m == null) m = new HashMap<>();
+            publicIp       = firstStr(m, "public_ip",        "example.com");
+            publicPort     = firstInt(m, "public_port",      16675, 1);
+            motd           = firstStr(m, "motd",             "");
+            serverName     = firstStr(m, "server_name",      "");
+            versionStr     = firstStr(m, "version",          "1.15-ToUplist");
+            versionInt     = firstInt(m, "version_int",      176,   1);
+            password       = firstStr(m, "password",         "0");
+            gameMode       = firstStr(m, "game_mode",        "skirmishMap");
+            try {
+                gameStatus = normalizeGameStatus(m.get("game_status"));
+            } catch (IllegalArgumentException e) {
+                gameStatus = "battleroom";
+                Log.warn(e.getMessage() + "，本次使用默认值 battleroom，请检查 " + CONFIG_FILE);
+            }
+            syncGameStatus = firstBool(m, "sync_game_status", true);
+            maxPlayers     = firstInt(m, "maxplayers",       10,    0);
+            syncMotdToMap  = firstBool(m, "sync_motd_to_map", true);
+            proxyEnabled   = firstBool(m, "proxy_enabled",   false);
+            proxyType      = "SOCKS".equalsIgnoreCase(firstStr(m, "proxy_type", "HTTP"))
+                             ? Proxy.Type.SOCKS : Proxy.Type.HTTP;
+            proxyHost      = firstStr(m, "proxy_host", "127.0.0.1");
+            proxyPort      = firstInt(m, "proxy_port", 1080, 1);
+            proxyUser      = firstStr(m, "proxy_user", "");
+            proxyPass      = firstStr(m, "proxy_pass", "");
+            try {
+                ensureStatusConfigKeys(f, m);
+            } catch (IOException e) {
+                Log.warn("补齐状态配置失败，运行时已使用默认值: " + e.getMessage());
+            }
+            Log.info("配置加载成功" + (proxyEnabled ? "，代理: " + proxyType + " " + proxyHost + ":" + proxyPort + (proxyUser.isEmpty() ? "" : " user=" + proxyUser) : ""));
         } catch (Exception e) { Log.warn("解析配置失败: " + e.getMessage()); }
+    }
+    /** 只追加旧配置缺失的状态键，不覆盖服主的手动值、同步开关和注释。 */
+    static void ensureStatusConfigKeys(File file, Map<?, ?> config) throws IOException {
+        StringBuilder missing = new StringBuilder();
+        if (!config.containsKey("sync_game_status")) {
+            missing.append("\n# 状态同步：true=实际房间状态，false=使用手动game_status。\n")
+                   .append("sync_game_status: true\n");
+        }
+        if (!config.containsKey("game_status")) {
+            missing.append("\n# 手动列表状态（battleroom或ingame），仅关闭状态同步时生效。\n")
+                   .append("game_status: battleroom\n");
+        }
+        if (missing.length() > 0) {
+            Files.writeString(file.toPath(), missing.toString(), StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.APPEND);
+        }
+    }
+
+    private static String firstStr(Map<?,?> m, String k, String def) {
+        Object v = m.get(k); return (v == null || ((String)v).isEmpty()) ? def : (String)v;
+    }
+    private static int firstInt(Map<?,?> m, String k, int def, int min) {
+        Object v = m.get(k);
+        if (v instanceof Number n) { int i = n.intValue(); return i > min ? i : def; }
+        try { int i = Integer.parseInt(((String)v).trim()); return i > min ? i : def; }
+        catch (Exception ignored) {} return def;
+    }
+    private static boolean firstBool(Map<?,?> m, String k, boolean def) {
+        Object v = m.get(k);
+        if (v instanceof Boolean b) return b;
+        if (!(v instanceof String s)) return def;
+        return s.trim().equalsIgnoreCase("true") || s.trim().equalsIgnoreCase("yes") || s.trim().equalsIgnoreCase("on");
+    }
+
+    /**
+     * 把内置 resources/config.yml 模板释放到工作目录，返回是否成功。
+     * 若资源不存在（例如打包时漏掉），返回 false 由调用方走代码默认值兜底。
+     */
+    private static boolean releaseDefaultConfig(File target) {
+        try (InputStream in = UplistPlugin.class.getResourceAsStream("/config.yml")) {
+            if (in == null) return false;
+            Files.copy(in, target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return true;
+        } catch (IOException e) {
+            Log.warn("释放默认配置失败: " + e.getMessage());
+            return false;
+        }
     }
 
     private void saveConfig() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("// ===================================================================\n");
-        sb.append("//  不要试图更改格式，请更改能更改的区域\n");
-        sb.append("//  (开过minecraft的腐竹们不可能不知道吧:)\n");
-        sb.append("//  任何更改其格式都可能导致插件爆炸\n");
-        sb.append("// ===================================================================\n");
-        sb.append("//\n");
-        sb.append("//  铁锈战争 Uplist 插件配置文件\n");
-        sb.append("//  修改后请使用命令 \"publish reload\" 热重载，或重启服务器生效。\n");
-        sb.append("//\n");
-        sb.append("//  可用指令：\n");
-        sb.append("//   publish start               启动列表公开\n");
-        sb.append("//   publish stop                关闭列表公开\n");
-        sb.append("//   publish reload              热重载此配置文件\n");
-        sb.append("//   publish ip <公网IP或域名>    设置你的公网IP地址\n");
-        sb.append("//   publish port <端口号>       设置公网映射端口\n");
-        sb.append("//   publish motd <内容>         设置服务器MOTD(地图描述)\n");
-        sb.append("//   publish name <房间名>       设置服务器房间名称\n");
-        sb.append("//   publish version <版本号>    设置游戏版本字符串(如1.15-Uplistpluginsreload)\n");
-        sb.append("//   publish maxplayers <数量>   设置最大玩家数(-1为自动计算)\n");
-        sb.append("//   publish syncmap             切换MOTD是否作为地图名显示\n");
-        sb.append("//   publish proxy <SOCKS|HTTP> <主机> [端口]  设置代理\n");
-        sb.append("//   publish proxy off           关闭代理\n");
-        sb.append("//   publish state               查看当前公开状态与配置\n");
-        sb.append("//   publish help                显示此帮助信息\n");
-        sb.append("//\n");
-        sb.append("{\n");
-        sb.append("  // 你的公网IP或域名。留空则使用内网IP占位符。\n");
-        sb.append("  \"public_ip\": \"").append(publicIp).append("\",\n");
-        sb.append("  // 公网端口，必须与端口映射/防火墙放行的端口一致。(内网穿透推荐端口和你的rukkit.yml中的port一致。)\n");
-        sb.append("  \"public_port\": ").append(publicPort).append(",\n");
-        sb.append("  // 服务器MOTD(地图描述)。留空则使用空字符串。\n");
-        sb.append("  \"motd\": \"").append(motd).append("\",\n");
-        sb.append("  // 房间名称。留空则自动使用Rukkit的serverName。\n");
-        sb.append("  \"server_name\": \"").append(serverName).append("\",\n");
-        sb.append("  // 游戏版本字符串，可自定义(如1.15-AA, 1.15BB)。\n");
-        sb.append("  \"version\": \"").append(versionStr).append("\",\n");
-        sb.append("  // 游戏版本号（整数），固定为176即可。\n");
-        sb.append("  \"version_int\": ").append(versionInt).append(",\n");
-        sb.append("  // 房间密码，\"0\"表示无密码。\n");
-        sb.append("  \"password\": \"").append(password).append("\",\n");
-        sb.append("  // 游戏模式，固定为\"skirmishMap\"。\n");
-        sb.append("  \"game_mode\": \"").append(gameMode).append("\",\n");
-        sb.append("  // 服务器状态，\"battleroom\"(等待中) 或 \"ingame\"(游戏中)。\n");
-        sb.append("  \"game_status\": \"").append(gameStatus).append("\",\n");
-        sb.append("  // 最大玩家数。填-1则自动使用Rukkit的maxPlayer设置。\n");
-        sb.append("  \"maxplayers\": ").append(maxPlayers).append(",\n");
-        sb.append("  // 是否将MOTD作为地图名称显示。true=同步，false=使用房间名作为地图名。\n");
-        sb.append("  \"sync_motd_to_map\": ").append(syncMotdToMap).append(",\n");
-        sb.append("  // 是否启用代理（配合云服务器可将房间状态从 L 变为 Y）\n");
-        sb.append("  \"proxy_enabled\": ").append(proxyEnabled).append(",\n");
-        sb.append("  // 代理类型，SOCKS 或 HTTP\n");
-        sb.append("  \"proxy_type\": \"").append(proxyType == Proxy.Type.SOCKS ? "SOCKS" : "HTTP").append("\",\n");
-        sb.append("  // 代理服务器地址（填写你的云服务器公网 IP）\n");
-        sb.append("  \"proxy_host\": \"").append(proxyHost).append("\",\n");
-        sb.append("  // 代理服务器端口\n");
-        sb.append("  \"proxy_port\": ").append(proxyPort).append("\n");
-        sb.append("}\n");
-        try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
-            writer.write(sb.toString());
+        try {
+            // 优先保留用户手写的 # 行注释（如自定义分组标题），仅替换手动修改过的字段值
+            File f = new File(CONFIG_FILE);
+            String header;
+            List<String> lines;
+            if (f.exists()) {
+                header = extractCommentHeader(f);   // 取文件开头的连续注释块
+                lines = Files.readAllLines(f.toPath(), StandardCharsets.UTF_8);
+            } else {
+                header = "# ===================================================================\n"
+                       + "#  不要试图更改格式，请更改能更改的区域\n"
+                       + "#  (开过 Minecraft / 铁锈战争的腐竹们不可能不知道吧:)\n"
+                       + "#  任何更改其格式都可能导致插件爆炸\n"
+                       + "# ===================================================================\n";
+                lines = new ArrayList<>();
+            }
+            // 只写被命令修改过的字段；用户手动改的值一律不覆盖
+            Set<String> touchedKeys = new HashSet<>();
+            List<String> extraLines = new ArrayList<>();
+            for (String line : lines) {
+                String trimmed = line.trim();
+                // 跳过纯注释/空行（保留）
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    extraLines.add(line);
+                    continue;
+                }
+                int colon = trimmed.indexOf(':');
+                if (colon < 0) { extraLines.add(line); continue; }
+                String key = trimmed.substring(0, colon).trim();
+                if (!MODIFIED_FIELDS.contains(key)) {
+                    // 未被命令修改过 → 原样保留用户的手动修改
+                    extraLines.add(line);
+                    continue;
+                }
+                touchedKeys.add(key);
+                Object newVal = getModifiedValue(key);
+                String formatted = formatYamlValue(newVal);
+                extraLines.add(line.substring(0, colon + 1) + formatted);
+            }
+            // 把缺失的键（首次生成时）追加到末尾
+            for (String k : MODIFIED_FIELDS) {
+                if (!touchedKeys.contains(k)) {
+                    extraLines.add("");
+                    extraLines.add("# " + k + "\n");
+                    extraLines.add(k + ": " + formatYamlValue(getModifiedValue(k)));
+                }
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(header);
+            for (String l : extraLines) sb.append(l).append('\n');
+            Files.write(f.toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) { Log.warn("保存配置失败: " + e.getMessage()); }
+    }
+    /** 命令级修改过的字段集合 —— 只有这些字段才会被子写入 */
+    private static final Set<String> MODIFIED_FIELDS = new HashSet<>(java.util.Arrays.asList(
+            "public_ip", "public_port", "server_name", "motd", "version",
+            "password", "game_mode", "game_status", "sync_game_status", "maxplayers",
+            "sync_motd_to_map", "proxy_enabled", "proxy_type",
+            "proxy_host", "proxy_port", "proxy_user", "proxy_pass"
+    ));
+    private Object getModifiedValue(String key) {
+        switch (key) {
+            case "public_ip":       return publicIp;
+            case "public_port":     return publicPort;
+            case "server_name":     return serverName;
+            case "motd":            return motd;
+            case "version":         return versionStr;
+            case "password":        return password;
+            case "game_mode":       return gameMode;
+            case "game_status":     return gameStatus;
+            case "sync_game_status":return syncGameStatus;
+            case "maxplayers":      return maxPlayers;
+            case "sync_motd_to_map":return syncMotdToMap;
+            case "proxy_enabled":   return proxyEnabled;
+            case "proxy_type":      return proxyType == Proxy.Type.SOCKS ? "SOCKS" : "HTTP";
+            case "proxy_host":      return proxyHost;
+            case "proxy_port":      return proxyPort;
+            case "proxy_user":      return proxyUser;
+            case "proxy_pass":      return proxyPass;
+            default: return "";
+        }
+    }
+
+    /** 从文件开头提取连续的 # 注释块作为头部（不含数据行）。 */
+    private static String extractCommentHeader(File f) throws IOException {
+        List<String> lines = Files.readAllLines(f.toPath(), StandardCharsets.UTF_8);
+        StringBuilder h = new StringBuilder();
+        for (String line : lines) {
+            String t = line.trim();
+            if (t.isEmpty() || t.startsWith("#")) {
+                h.append(line).append('\n');
+            } else {
+                break;
+            }
+        }
+        return h.isEmpty() ? "# Config\n" : h.toString();
+    }
+
+    /** 把 Java 值渲染成合法的 YAML 标量（不带多余引号）。 */
+    private static String formatYamlValue(Object v) {
+        if (v == null) return "~";
+        if (v instanceof Boolean b) return b ? "true" : "false";
+        if (v instanceof Number n) return n.toString();
+        String s = v.toString();
+        if (s.isEmpty()) return "''";
+        // 仅当包含会改变语义的特殊字符时才加双引号
+        if (!s.matches("[^\\s#:\\-?,\\[\\]{}&*!|@'%\"\\\\]+")) {
+            s = s.replace("\\", "\\\\").replace("\"", "\\\"")
+                 .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+            return "\"" + s + "\"";
+        }
+        return s;
     }
 }
