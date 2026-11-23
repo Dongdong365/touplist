@@ -1,5 +1,12 @@
 # touplist-plugin
 
+如需及时获取 插件更新、插件bug修复提醒、服务维护计划相关通知：
+- [🔗 DongServer 铁锈项目｜公告 / 维护 / 信息群｜DS 铁锈战争板块团队](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=_OL6wM37J-rRqb7cddCEL77M49oXGm-9&authKey=jfmvajQVTL2ZOXvJ3%2F6Yd1P5OxwyBdgM9Z4tLEtVkAw2rky7sXbjHlhEsZlE7%2BAF&noverify=0&group_code=1137115254)
+> 本群全员禁言，仅发布公告、维护与重要信息，不受闲聊打扰。
+
+- [🔗 DongServer 铁锈项目｜插件综合交流群｜DS 铁锈战争板块团队](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=jDx_gKpyevcjZy5TDzDmWEOj12BxkbzJ&authKey=i2q5ElJ8Lt3Yno6glcVxp48DUhcI0rqjc7J5Mm67b9x7UZbvMe2c8HPCDl8ncD%2B4&noverify=0&group_code=1134792973)
+> 用于开服交流、插件排错、技术问题讨论。
+
 > [!WARNING]
 > **我们并无义务为你提供服务。**
 >
@@ -44,9 +51,10 @@ CNKD-NEXT服务端见:[为什么我的服务端拒绝加载插件？（CNKD NEXT
 
 ## ✨ 功能特性
 
-- **配置持久化**：支持 `config.json` 配置文件（带注释），所有参数可热重载
+- **配置持久化**：支持 `config.yml` 配置文件（标准 `#` 行注释），所有参数可热重载
 - **自定义版本号**：支持自定义游戏版本显示（如 `1.15-UR`、`1.15-FG`）
-- **MOTD 同步开关**：可选择 MOTD 是否作为地图名称显示
+- **地图同步开关**：`true` 同步 RW-HPS 当前实际地图名，`false` 使用自定义 `motd`；保留完整内容
+- **状态同步开关**：`sync_game_status: true` 自动同步战役室/游戏中状态，`false` 使用手动 `game_status`
 - **代理支持**：内置 SOCKS5/HTTP 代理，解决内网穿透时的端口自检问题
 
 ---
@@ -72,65 +80,99 @@ gradle shadowJar
 
 ### 第二步：配置并启动插件
 1. 把编译好的插件 jar 放到 RW-HPS 的 `plugins` 文件夹，启动服务器。
-2. 首次运行时，插件会自动在服务器根目录生成 `config.json` 配置文件，你可以直接打开修改，保存后用 `publish reload` 热加载。
-3. 修改 `config.json` 中的 `public_ip` 和 `public_port` 为你自己的公网 IP(或与代理同ip的内网穿透，文后会讲)/域名和端口。
+2. 首次运行时，插件会自动在服务器根目录生成 `config.yml` 配置文件，你可以直接打开修改，保存后用 `publish reload` 热加载。
+3. 修改 `config.yml` 中的 `public_ip` 和 `public_port` 为你自己的公网 IP(或与代理同ip的内网穿透，文后会讲)/域名和端口。
+4. `sync_game_status: true` 默认自动同步房间状态；如需手动显示，设为 `false` 并填写 `game_status: battleroom` 或 `ingame`。修改后执行 `publish reload`，下一次上报生效（正常每15秒一次）。旧配置加载时会自动补齐缺失的状态配置项，不覆盖已有值。
 
-**`config.json` 默认内容**：
-```json
-// ===================================================================
-//  不要试图更改格式，请更改能更改的区域
-//  (开过minecraft的腐竹们不可能不知道吧:)
-//  任何更改其格式都可能导致插件爆炸
-// ===================================================================
-//
-//  可用指令：
-//   publish start               启动列表公开
-//   publish stop                关闭列表公开
-//   publish reload              热重载此配置文件
-//   publish ip <公网IP或域名>    设置你的公网IP地址
-//   publish port <端口号>       设置公网映射端口
-//   publish motd <内容>         设置服务器MOTD(地图描述)
-//   publish name <房间名>       设置服务器房间名称
-//   publish version <版本号>    设置游戏版本字符串(如1.15-Uplistpluginsreload)
-//   publish maxplayers <数量>   设置最大玩家数(-1为自动计算)
-//   publish syncmap             切换MOTD是否作为地图名显示
-//   publish proxy <SOCKS|HTTP> <主机> [端口]  设置代理
-//   publish proxy off           关闭代理
-//   publish state               查看当前公开状态与配置
-//   publish help                显示此帮助信息
-//
-{
-  // 你的公网IP或域名。留空则使用内网IP占位符。
-  "public_ip": "",
-  // 公网端口，必须与端口映射/防火墙放行的端口一致。(内网穿透推荐端口和你的rukkit.yml中的port一致。)
-  "public_port": 5123,
-  // 服务器MOTD(地图描述)。留空则自动使用Rukkit默认MOTD。
-  "motd": "",
-  // 房间名称。留空则自动使用Rukkit的serverUser。
-  "server_name": "",
-  // 游戏版本字符串，可自定义(如1.15-AA, 1.15BB)。
-  "version": "1.15-Uplistpluginsreload",
-  // 游戏版本号（整数），固定为176即可。
-  "version_int": 176,
-  // 房间密码，"0"表示无密码。
-  "password": "0",
-  // 游戏模式，固定为"skirmishMap"。
-  "game_mode": "skirmishMap",
-  // 服务器状态，"battleroom"(等待中) 或 "ingame"(游戏中)。
-  "game_status": "battleroom",
-  // 最大玩家数。填-1则自动使用Rukkit的maxPlayer * maxRoom计算。
-  "maxplayers": -1,
-  // 是否将MOTD作为地图名称显示。true=同步，false=使用房间名作为地图名。
-  "sync_motd_to_map": true,
-  // 是否启用代理（解决内网穿透时端口自检失败的问题）(目前由于1.15api更新了导致此方法失效)
-  "proxy_enabled": false,
-  // 代理类型，SOCKS 或 HTTP
-  "proxy_type": "SOCKS",
-  // 代理服务器地址
-  "proxy_host": "127.0.0.1",
-  // 代理服务器端口
-  "proxy_port": 1080
-}
+**`config.yml` 默认内容**：
+```yaml
+# ===================================================================
+#  不要试图更改格式，请更改能更改的区域
+#  (开过 Minecraft / 铁锈战争的腐竹们不可能不知道吧:)
+#  任何更改其格式都可能导致插件爆炸
+# ===================================================================
+#
+#  铁锈战争 Uplist 插件配置文件
+#  修改后请使用命令 "publish reload" 热重载，或重启服务器生效。
+#
+#  可用指令：
+#   publish start               启动列表公开
+#   publish stop                关闭列表公开
+#   publish reload              热重载此配置文件
+#   publish ip <公网IP或域名>    设置你的公网IP地址
+#   publish port <端口号>       设置公网映射端口
+#   publish motd <内容>         设置服务器MOTD(地图描述)
+#   publish name <房间名>       设置服务器房间名称
+#   publish version <版本号>    设置游戏版本字符串(如1.15-FG)
+#   publish maxplayers <数量>   设置最大玩家数(-1为自动计算)
+#   publish syncmap             切换地图同步（开启=实际地图，关闭=自定义MOTD）
+#   publish syncstatus          切换状态同步（开启=实际状态，关闭=手动game_status）
+#   publish status <状态>       设置手动状态（battleroom或ingame）
+#   publish proxy <SOCKS|HTTP> <主机> [端口] [用户] [密码]  设置代理
+#   publish proxy off           关闭代理
+#   publish state               查看当前公开状态与配置
+#   publish help                显示此帮助信息
+#
+
+# ── 基础信息 ───────────────────────────────────────────────────────
+
+# 你的公网IP或域名。留空则使用内网IP占位符。
+public_ip: example.com
+
+# 公网端口，必须与端口映射/防火墙放行的端口一致。（内网穿透端口需与RW-HPS配置文件中port一致。）
+public_port: 16675
+
+# 房间名称。留空则自动使用RW-HPS配置文件中的serverUser。
+server_name: ""
+
+# 自定义MOTD：关闭地图同步(sync_motd_to_map: false)时作为列表地图描述；留空则显示空字符串。
+motd: ""
+
+# 游戏版本字符串，可自定义(如1.15-AA、1.15BB)。
+version: "1.15-ToUplist"
+
+# 游戏版本号（整数），固定为176即可。
+version_int: 176
+
+# ── 房间设置 ───────────────────────────────────────────────────────
+
+# 房间密码，0表示无密码。
+password: "0"
+
+# 游戏模式，固定为 skirmishMap。
+game_mode: skirmishMap
+
+# 状态同步开关：true=跟随RW-HPS房间状态，false=使用下方手动game_status。
+# 战役室/等待中为battleroom，游戏中为ingame；随下一次上报更新（正常每15秒一次）。
+sync_game_status: true
+
+# 手动列表状态，仅在sync_game_status为false时生效；不会改变服务器实际游戏状态。
+# 只允许 battleroom（战役室/等待中）或 ingame（游戏中）。
+game_status: battleroom
+
+# 最大玩家数。填-1则自动使用RW-HPS配置文件中的maxPlayer * maxRoom计算。
+maxplayers: 10
+
+# 地图同步开关：true=使用RW-HPS当前实际地图名，false=使用上面的自定义motd。两者均保留完整内容。
+sync_motd_to_map: true
+
+# ── 网络代理 ───────────────────────────────────────────────────────
+
+# 是否启用代理（仅当插件直接连接官方时需要，默认走 SIGN_API 不需要）
+proxy_enabled: false
+
+# 代理类型：SOCKS 或 HTTP（请选择HTTP）。填错会自动回退到 SOCKS。
+proxy_type: HTTP
+
+# 代理服务器地址（如 127.0.0.1 或 socks.example.com）
+proxy_host: "127.0.0.1"
+
+# 代理服务器端口
+proxy_port: 1080
+
+# 代理凭证。若代理无需用户名密码请留空；若有则填入，会随请求发送 Base64 认证头。
+proxy_user: ""
+proxy_pass: ""
 ```
 
 ---
@@ -187,7 +229,9 @@ frp有密钥基本上不怕，但是如果你有 SOCKS/HTTP 代理安全 需求 
 | `publish name <房间名>` | 设置房间名称 |
 | `publish version <版本号>` | 设置游戏版本字符串(如1.15-FG) |
 | `publish maxplayers <数量>` | 设置最大玩家数(-1为自动计算) |
-| `publish syncmap` | 切换 MOTD 是否作为地图名显示 |
+| `publish syncmap` | 切换地图同步：开启使用实际地图名，关闭使用自定义 MOTD |
+| `publish syncstatus` | 切换状态同步：开启使用实际房间状态，关闭使用手动 game_status |
+| `publish status <battleroom\|ingame>` | 设置手动列表状态（仅关闭状态同步时生效） |
 | `publish proxy <SOCKS\|HTTP> <主机> [端口]` | 设置代理 |
 | `publish proxy off` | 关闭代理 |
 | `publish state` | 查看当前公开状态与配置 |
