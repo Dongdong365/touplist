@@ -36,5 +36,5 @@ jobs:
       - name: Upload built JARs
         uses: actions/upload-artifact@v4
         with:
-          name: ToUpList-BuildTest
-          path: build/libs/*.jar
+          path: ${{ steps.jarpath.outputs.jar }}
+          archive: false
