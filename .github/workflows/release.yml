@@ -25,15 +25,15 @@ jobs:
           cache-read-only: false
 
       - name: Change wrapper permissions
-        run: chmod +x touplist/gradlew
+        run: chmod +x ./gradlew
 
       - name: Publish
-        run: cd touplist && ./gradlew build
+        run: ./gradlew build
 
       - name: Attach JAR to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ./*/build/libs/*.jar
+          files: build/libs/*.jar
           generate_release_notes: true
           append_body: true
         env:
@@ -43,4 +43,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ToUpList-BuildRelease
-          path: ./*/build/libs/*.jar
+          path: build/libs/*.jar
