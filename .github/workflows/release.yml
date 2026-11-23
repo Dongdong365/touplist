@@ -24,8 +24,11 @@ jobs:
         with:
           cache-read-only: false
 
+      - name: Change wrapper permissions
+        run: chmod +x touplist/gradlew
+
       - name: Publish
-        run: ./gradlew build
+        run: cd touplist && ./gradlew build
 
       - name: Attach JAR to GitHub Release
         uses: softprops/action-gh-release@v2
