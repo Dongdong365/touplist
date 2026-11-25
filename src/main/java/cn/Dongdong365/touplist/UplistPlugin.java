@@ -688,6 +688,8 @@ public class UplistPlugin extends Plugin {
 
     private void saveConfig() {
         try {
+            // 写盘前先静默重载，确保写入的是最新磁盘值而非旧内存缓存
+            loadConfig();
             File f = new File(CONFIG_FILE);
             List<String> lines = f.exists() ? Files.readAllLines(f.toPath(), StandardCharsets.UTF_8) : new ArrayList<>();
             Set<String> touchedKeys = new HashSet<>();
