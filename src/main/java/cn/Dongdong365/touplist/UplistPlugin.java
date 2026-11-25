@@ -157,10 +157,13 @@ public class UplistPlugin extends Plugin {
             printHelp();
             return;
         }
+        // 执行前重载：先把磁盘 config.yml 同步到内存，
+        // 防止用户手工改过文件后，命令的保存把磁盘修改覆盖掉
+        loadConfig();
         switch (args[0]) {
             case "start": if (isPublished) Log.info("服务器已经在列表中"); else addServer(); break;
             case "stop": if (!isPublished) Log.info("服务器未在列表中"); else stopServer(); break;
-            case "reload": loadConfig(); Log.info("配置已重载"); break;
+            case "reload": Log.info("配置已重载"); break;
             case "ip": if (args.length > 1) { publicIp = args[1]; saveConfig(); Log.info("IP 已设为: " + publicIp); if (isPublished) updateServer(); } else Log.info("当前 IP: " + (publicIp.isEmpty() ? "未设置" : publicIp)); break;
             case "port": if (args.length > 1) { try { publicPort = Integer.parseInt(args[1]); saveConfig(); Log.info("端口: " + publicPort); if (isPublished) updateServer(); } catch (NumberFormatException e) { Log.error("无效端口"); } } else Log.info("当前端口: " + publicPort); break;
             case "motd": if (args.length > 1) { motd = args[1]; saveConfig(); Log.info("MOTD: " + motd); if (isPublished) updateServer(); } else Log.info("当前 MOTD: " + (motd.isEmpty() ? "(空)" : motd)); break;
@@ -616,43 +619,65 @@ public class UplistPlugin extends Plugin {
             proxyPass      = firstStr(m, "proxy_pass", "");
             updateCheckEnabled = firstBool(m, "update-check", true);
             try {
-                ensureStatusConfigKeys(f, m);
-                ensureUpdateCheckKeys(f, m);
+                ensureAllConfigKeysPresent(f, m);
             } catch (IOException e) {
-                Log.warn("补齐状态配置失败，运行时已使用默认值: " + e.getMessage());
+                Log.warn("补齐配置项失败，运行时已使用默认值: " + e.getMessage());
             }
             Log.info("配置加载成功" + (proxyEnabled ? "，代理: " + proxyType + " " + proxyHost + ":" + proxyPort + (proxyUser.isEmpty() ? "" : " user=" + proxyUser) : ""));
         } catch (Exception e) { Log.warn("解析配置失败: " + e.getMessage()); }
     }
-    /** 只追加旧配置缺失的状态键，不覆盖服主的手动值、同步开关和注释。 */
-    static void ensureStatusConfigKeys(File file, Map<?, ?> config) throws IOException {
+    /**
+     * 权威配置键清单 —— 任意一个新字段只需要在这里声明默认值，
+     * 下次载入时若 config.yml 缺少该键会自动在末尾追加，无需单独写补丁方法。
+     */
+    private static final java.util.Map<String, Object> ALL_CONFIG_KEYS_SCHEMA;
+    static {
+        java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
+        map.put("public_ip",           "必须修改");
+        map.put("public_port",         16675);
+        map.put("server_name",         "");
+        map.put("version",             "1.15-ToUplist");
+        map.put("version_int",         176);
+        map.put("password",            "0");
+        map.put("game_mode",           "skirmishMap");
+        map.put("sync_game_status",    Boolean.TRUE);
+        map.put("game_status",         "battleroom");
+        map.put("maxplayers",          10);
+        map.put("sync_motd_to_map",    Boolean.TRUE);
+        map.put("motd",                "");
+        map.put("proxy_enabled",       Boolean.FALSE);
+        map.put("proxy_type",          "HTTP");
+        map.put("proxy_host",          "127.0.0.1");
+        map.put("proxy_port",          1080);
+        map.put("proxy_user",          "");
+        map.put("proxy_pass",          "");
+        map.put("update-check",        Boolean.TRUE);
+        ALL_CONFIG_KEYS_SCHEMA = java.util.Collections.unmodifiableMap(map);
+    }
+    /**
+     * 检查 config.yml 是否包含全部已知配置键；缺失时在文件末尾追加一行默认值。
+     * 不覆盖已有内容、不动注释和格式，仅做增量补全。
+     */
+    static void ensureAllConfigKeysPresent(File file, Map<?, ?> loaded) throws IOException {
         StringBuilder missing = new StringBuilder();
-        if (!config.containsKey("sync_game_status")) {
-            missing.append("\n# 状态同步：true=实际房间状态，false=使用手动game_status。\n")
-                   .append("sync_game_status: true\n");
-        }
-        if (!config.containsKey("game_status")) {
-            missing.append("\n# 手动列表状态（battleroom或ingame），仅关闭状态同步时生效。\n")
-                   .append("game_status: battleroom\n");
+        for (java.util.Map.Entry<String, Object> entry : ALL_CONFIG_KEYS_SCHEMA.entrySet()) {
+            if (!loaded.containsKey(entry.getKey())) {
+                missing.append(entry.getKey()).append(": ")
+                       .append(formatYamlValueForNewKey(entry.getValue()))
+                       .append('\n');
+            }
         }
         if (missing.length() > 0) {
-            Files.writeString(file.toPath(), missing.toString(), StandardCharsets.UTF_8,
+            Files.writeString(file.toPath(), "\n" + missing, StandardCharsets.UTF_8,
                     java.nio.file.StandardOpenOption.APPEND);
         }
     }
-    /** 只追加旧配置缺失的更新检查键。 */
-    static void ensureUpdateCheckKeys(File file, Map<?, ?> config) throws IOException {
-        StringBuilder missing = new StringBuilder();
-        if (!config.containsKey("update-check")) {
-            missing.append("\n# ── 版本更新检查 ───────────────────────────────────────────────\n")
-                   .append("# 是否开启后台定时检查更新（每次随机 60～240 分钟再查一次）\n")
-                   .append("# true=开启，false=关闭。可通过 publish update 手动触发检查。\n")
-                   .append("update-check: true\n");
-        }
-        if (missing.length() > 0) {
-            Files.writeString(file.toPath(), missing.toString(), StandardCharsets.UTF_8,
-                    java.nio.file.StandardOpenOption.APPEND);
-        }
+    /** 为自动追加场景格式化默认值（空字符串加引号，其余走标准 YAML 标量规则）。 */
+    private static String formatYamlValueForNewKey(Object v) {
+        if (v instanceof String s) return s.isEmpty() ? "\"\"" : s;
+        if (v instanceof Boolean b) return b ? "true" : "false";
+        if (v instanceof Number n) return n.toString();
+        return v == null ? "~" : v.toString();
     }
 
     private static String firstStr(Map<?,?> m, String k, String def) {
@@ -688,8 +713,6 @@ public class UplistPlugin extends Plugin {
 
     private void saveConfig() {
         try {
-            // 写盘前先静默重载，确保写入的是最新磁盘值而非旧内存缓存
-            loadConfig();
             File f = new File(CONFIG_FILE);
             List<String> lines = f.exists() ? Files.readAllLines(f.toPath(), StandardCharsets.UTF_8) : new ArrayList<>();
             Set<String> touchedKeys = new HashSet<>();
