@@ -706,8 +706,11 @@ public class UplistPlugin extends Plugin {
                     continue;
                 }
                 touchedKeys.add(key);
+                // 保留原始行的前导空白（若有），以 "key: value" 格式重写值
+                int prefix = 0;
+                while (prefix < line.length() && Character.isWhitespace(line.charAt(prefix))) prefix++;
                 String formatted = formatYamlValue(getModifiedValue(key));
-                out.add(line.substring(0, colon + 1) + formatted);
+                out.add(line.substring(0, prefix) + key + ": " + formatted);
             }
             for (String k : MODIFIED_FIELDS) {
                 if (!touchedKeys.contains(k)) {
