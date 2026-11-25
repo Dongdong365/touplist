@@ -70,6 +70,9 @@ public class UplistPlugin extends Plugin {
     private boolean renewing = false;
     private boolean isPublished = false;
     private boolean upState = false;
+    /** 版本检查开关（来自配置 update-check） */
+    private boolean updateCheckEnabled = true;
+    private final RemoteVersionChecker versionChecker = new RemoteVersionChecker();
 
     // 互斥锁：同一时刻只允许一个上架/下架/更新任务（覆盖签名+两个官方请求全程）
     private final java.util.concurrent.atomic.AtomicBoolean opBusy = new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -123,19 +126,26 @@ public class UplistPlugin extends Plugin {
     }
 
     public void onEnable() {
-    scheduler = Executors.newSingleThreadScheduledExecutor();
-    new RemoteVersionChecker().checkAndLog();
-    try {
-        loadConfig();
-        Log.info("Uplist 插件加载完成。使用 publish help 查看指令。");
-        fetchDiagnostic();
-    } catch (Exception e) {
-        Log.error("配置加载失败，尝试解决或备份配置文件后删除以重新生成", e);
+        scheduler = Executors.newSingleThreadScheduledExecutor();
+        new RemoteVersionChecker().checkAndLog();
+        try {
+            loadConfig();
+            versionChecker.setEnabled(updateCheckEnabled);
+            if (updateCheckEnabled) {
+                versionChecker.init(scheduler);
+            } else {
+                versionChecker.logDisabled();
+            }
+            Log.info("Uplist 插件加载完成。使用 publish help 查看指令。");
+            fetchDiagnostic();
+        } catch (Exception e) {
+            Log.error("配置加载失败，尝试解决或备份配置文件后删除以重新生成", e);
+        }
     }
-}
 
     @Override
     public void onDisable() {
+        versionChecker.cancelPeriodicTasks();
         if (scheduler != null && !scheduler.isShutdown()) {
             scheduler.shutdownNow();
         }
@@ -158,23 +168,24 @@ public class UplistPlugin extends Plugin {
             case "version": if (args.length > 1) { versionStr = args[1]; saveConfig(); Log.info("版本: " + versionStr); if (isPublished) updateServer(); } else Log.info("当前版本: " + versionStr); break;
             case "maxplayers": if (args.length > 1) { try { maxPlayers = Integer.parseInt(args[1]); saveConfig(); Log.info("最大玩家: " + (maxPlayers == -1 ? "自动" : maxPlayers)); if (isPublished) updateServer(); } catch (NumberFormatException e) { Log.error("无效数字"); } } else Log.info("当前最大玩家: " + (maxPlayers == -1 ? "自动" : maxPlayers)); break;
             case "syncmap": syncMotdToMap = !syncMotdToMap; saveConfig(); Log.info("同步地图: " + (syncMotdToMap ? "开（实际地图）" : "关（自定义MOTD）")); if (isPublished) updateServer(); break;
-            case "syncstatus": syncGameStatus = !syncGameStatus; saveConfig(); Log.info("状态同步: " + (syncGameStatus ? "开（实际房间状态）" : "关（手动game_status）")); if (isPublished) updateServer(); break;
+            case "syncstatus": syncGameStatus = !syncGameStatus; saveConfig(); Log.info("状态同步: " + (syncGameStatus ? "开（实际房间状态）" : "关（手动编辑game_status）")); if (isPublished) updateServer(); break;
             case "status":
                 if (args.length > 1) {
                     try {
                         gameStatus = normalizeGameStatus(args[1]);
                         saveConfig();
-                        Log.info("手动列表状态: " + gameStatus + (syncGameStatus ? "（状态同步开启，关闭后生效）" : ""));
+                        Log.info("手动房间状态: " + gameStatus + (syncGameStatus ? "（状态同步开启，关闭后生效）" : ""));
                         if (isPublished && !syncGameStatus) updateServer();
                     } catch (IllegalArgumentException e) {
                         Log.error(e.getMessage());
                     }
                 } else {
-                    Log.info("手动列表状态: " + gameStatus + " | 状态同步: " + (syncGameStatus ? "开" : "关"));
+                    Log.info("手动房间状态: " + gameStatus + " | 状态同步: " + (syncGameStatus ? "开" : "关"));
                 }
                 break;
             case "proxy": handleProxyArgs(args); break;
             case "state": printState(); break;
+            case "update": versionChecker.runCheckNow(); break;
             default: printHelp();
         }
     }
@@ -224,12 +235,13 @@ public class UplistPlugin extends Plugin {
                 "publish status <battleroom|ingame> 设置手动列表状态\n" +
                 "publish proxy <SOCKS|HTTP> <主机> [端口] [用户] [密码]\n" +
                 "publish proxy off\n" +
+                "publish update 手动检查更新\n" +
                 "publish state / help");
     }
 
     private void printState() {
         String name = serverName.isEmpty() ? Data.config.getServerName() : serverName;
-        String actualStatus = "未初始化";
+        String actualStatus = "服务器暂未开启，稍等。（初始化）";
         try {
             actualStatus = selectListGameStatus(true, HeadlessModuleManage.INSTANCE.getHps().getRoom().isStartGame(), gameStatus);
         } catch (Exception ignored) { }
@@ -288,7 +300,7 @@ public class UplistPlugin extends Plugin {
         }
         // 互斥锁：同一时刻只允许一个上架/下架/更新任务，防止重复注册
         if (!opBusy.compareAndSet(false, true)) {
-            Log.warn("已有上架/下架/更新任务在进行中，请稍后再试");
+            Log.warn("当前服务器已有上架/下架/更新任务在进行中，请手动结束稍后再试或重启服务端");
             return;
         }
         // 使用核心配置获取端口和服务器名
@@ -602,8 +614,10 @@ public class UplistPlugin extends Plugin {
             proxyPort      = firstInt(m, "proxy_port", 1080, 1);
             proxyUser      = firstStr(m, "proxy_user", "");
             proxyPass      = firstStr(m, "proxy_pass", "");
+            updateCheckEnabled = firstBool(m, "update-check", true);
             try {
                 ensureStatusConfigKeys(f, m);
+                ensureUpdateCheckKeys(f, m);
             } catch (IOException e) {
                 Log.warn("补齐状态配置失败，运行时已使用默认值: " + e.getMessage());
             }
@@ -620,6 +634,20 @@ public class UplistPlugin extends Plugin {
         if (!config.containsKey("game_status")) {
             missing.append("\n# 手动列表状态（battleroom或ingame），仅关闭状态同步时生效。\n")
                    .append("game_status: battleroom\n");
+        }
+        if (missing.length() > 0) {
+            Files.writeString(file.toPath(), missing.toString(), StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.APPEND);
+        }
+    }
+    /** 只追加旧配置缺失的更新检查键。 */
+    static void ensureUpdateCheckKeys(File file, Map<?, ?> config) throws IOException {
+        StringBuilder missing = new StringBuilder();
+        if (!config.containsKey("update-check")) {
+            missing.append("\n# ── 版本更新检查 ───────────────────────────────────────────────\n")
+                   .append("# 是否开启后台定时检查更新（每次随机 60～240 分钟再查一次）\n")
+                   .append("# true=开启，false=关闭。可通过 publish update 手动触发检查。\n")
+                   .append("update-check: true\n");
         }
         if (missing.length() > 0) {
             Files.writeString(file.toPath(), missing.toString(), StandardCharsets.UTF_8,
@@ -660,56 +688,35 @@ public class UplistPlugin extends Plugin {
 
     private void saveConfig() {
         try {
-            // 优先保留用户手写的 # 行注释（如自定义分组标题），仅替换手动修改过的字段值
             File f = new File(CONFIG_FILE);
-            String header;
-            List<String> lines;
-            if (f.exists()) {
-                header = extractCommentHeader(f);   // 取文件开头的连续注释块
-                lines = Files.readAllLines(f.toPath(), StandardCharsets.UTF_8);
-            } else {
-                header = "# ===================================================================\n"
-                       + "#  不要试图更改格式，请更改能更改的区域\n"
-                       + "#  (开过 Minecraft / 铁锈战争的腐竹们不可能不知道吧:)\n"
-                       + "#  任何更改其格式都可能导致插件爆炸\n"
-                       + "# ===================================================================\n";
-                lines = new ArrayList<>();
-            }
-            // 只写被命令修改过的字段；用户手动改的值一律不覆盖
+            List<String> lines = f.exists() ? Files.readAllLines(f.toPath(), StandardCharsets.UTF_8) : new ArrayList<>();
             Set<String> touchedKeys = new HashSet<>();
-            List<String> extraLines = new ArrayList<>();
+            List<String> out = new ArrayList<>();
             for (String line : lines) {
                 String trimmed = line.trim();
-                // 跳过纯注释/空行（保留）
                 if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-                    extraLines.add(line);
+                    out.add(line);
                     continue;
                 }
                 int colon = trimmed.indexOf(':');
-                if (colon < 0) { extraLines.add(line); continue; }
+                if (colon < 0) { out.add(line); continue; }
                 String key = trimmed.substring(0, colon).trim();
                 if (!MODIFIED_FIELDS.contains(key)) {
-                    // 未被命令修改过 → 原样保留用户的手动修改
-                    extraLines.add(line);
+                    out.add(line);
                     continue;
                 }
                 touchedKeys.add(key);
-                Object newVal = getModifiedValue(key);
-                String formatted = formatYamlValue(newVal);
-                extraLines.add(line.substring(0, colon + 1) + formatted);
+                String formatted = formatYamlValue(getModifiedValue(key));
+                out.add(line.substring(0, colon + 1) + formatted);
             }
-            // 把缺失的键（首次生成时）追加到末尾
             for (String k : MODIFIED_FIELDS) {
                 if (!touchedKeys.contains(k)) {
-                    extraLines.add("");
-                    extraLines.add("# " + k + "\n");
-                    extraLines.add(k + ": " + formatYamlValue(getModifiedValue(k)));
+                    out.add("");
+                    out.add(k + ": " + formatYamlValue(getModifiedValue(k)));
                 }
             }
-
             StringBuilder sb = new StringBuilder();
-            sb.append(header);
-            for (String l : extraLines) sb.append(l).append('\n');
+            for (String l : out) sb.append(l).append('\n');
             Files.write(f.toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) { Log.warn("保存配置失败: " + e.getMessage()); }
     }
@@ -718,7 +725,8 @@ public class UplistPlugin extends Plugin {
             "public_ip", "public_port", "server_name", "motd", "version",
             "password", "game_mode", "game_status", "sync_game_status", "maxplayers",
             "sync_motd_to_map", "proxy_enabled", "proxy_type",
-            "proxy_host", "proxy_port", "proxy_user", "proxy_pass"
+            "proxy_host", "proxy_port", "proxy_user", "proxy_pass",
+            "update-check"
     ));
     private Object getModifiedValue(String key) {
         switch (key) {
@@ -739,24 +747,11 @@ public class UplistPlugin extends Plugin {
             case "proxy_port":      return proxyPort;
             case "proxy_user":      return proxyUser;
             case "proxy_pass":      return proxyPass;
+            case "update-check":    return updateCheckEnabled;
             default: return "";
         }
     }
 
-    /** 从文件开头提取连续的 # 注释块作为头部（不含数据行）。 */
-    private static String extractCommentHeader(File f) throws IOException {
-        List<String> lines = Files.readAllLines(f.toPath(), StandardCharsets.UTF_8);
-        StringBuilder h = new StringBuilder();
-        for (String line : lines) {
-            String t = line.trim();
-            if (t.isEmpty() || t.startsWith("#")) {
-                h.append(line).append('\n');
-            } else {
-                break;
-            }
-        }
-        return h.isEmpty() ? "# Config\n" : h.toString();
-    }
 
     /** 把 Java 值渲染成合法的 YAML 标量（不带多余引号）。 */
     private static String formatYamlValue(Object v) {
