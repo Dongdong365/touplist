@@ -185,7 +185,7 @@ public class UplistPlugin extends Plugin {
                 break;
             case "proxy": handleProxyArgs(args); break;
             case "state": printState(); break;
-            case "update": versionChecker.runCheckNow(); break;
+            case "update": if (versionChecker.isChecking()) Log.info("正在检查中..."); else versionChecker.runCheckNow(); break;
             default: printHelp();
         }
     }

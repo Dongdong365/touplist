@@ -16,10 +16,10 @@ import java.util.concurrent.TimeUnit;
 
 public class RemoteVersionChecker {
     // ======================== 可配置常量（只改这里） ========================
-    private static final String PLUGIN_NAME = "toulist-plugin";
+    private static final String PLUGIN_NAME = "touplist-plugin";
     private static final String CURRENT_VERSION = "v26.11.25";
     private static final String REMOTE_URL = "https://www.rustedsvrwiki.de5.net/dongserverpluginslastversion.txt";
-    private static final String PREFIX = "toulist";
+    private static final String PREFIX = "touplist";
     // =====================================================================
 
     // ======================== 运行时配置 ========================
@@ -49,7 +49,7 @@ public class RemoteVersionChecker {
 
     private static final ExecutorService UPDATE_EXECUTOR = Executors.newSingleThreadExecutor(
         (Runnable r) -> {
-            Thread t = new Thread(r, "toulist(publish)");
+            Thread t = new Thread(r, "touplist(publish)");
             t.setDaemon(true);
             return t;
         }
@@ -60,6 +60,7 @@ public class RemoteVersionChecker {
     private final String remoteUrl;
     private final String prefix;
     private volatile boolean checked = false;
+    private volatile boolean checking = false;
     private volatile ScheduledExecutorService periodicScheduler;
 
     public RemoteVersionChecker() {
@@ -93,7 +94,7 @@ public class RemoteVersionChecker {
         long delayMs = intervalMs / 3L + (long)(Math.random() * (2L * intervalMs / 3L));
         periodicScheduler = Executors.newSingleThreadScheduledExecutor(
             (Runnable r) -> {
-                Thread t = new Thread(r, "toulist(update-check)");
+                Thread t = new Thread(r, "touplist(update-check)");
                 t.setDaemon(true);
                 return t;
             }
@@ -106,7 +107,9 @@ public class RemoteVersionChecker {
     }
 
     public void runCheckNow() {
+        if (checking) return;
         checked = false;
+        checking = true;
         checkAndLog();
     }
 
@@ -131,6 +134,8 @@ public class RemoteVersionChecker {
                 }
             } catch (Exception e) {
                 Log.error("[" + prefix + "] 检查更新失败，请手动检查更新。当然，该插件仍能继续运行(正常使用无法保证)。", e);
+            } finally {
+                checking = false;
             }
         }, UPDATE_EXECUTOR);
     }
@@ -141,7 +146,9 @@ public class RemoteVersionChecker {
         return null;
     }
 
-    public void resetCheck() { checked = false; }
+    public void resetCheck() { checked = false; checking = false; }
+
+    public boolean isChecking() { return checking; }
 
     private String fetchRemoteVersion() throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(remoteUrl).openConnection();
